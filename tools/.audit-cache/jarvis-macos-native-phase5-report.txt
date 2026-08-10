@@ -1,0 +1,120 @@
+JARVIS macOS NATIVE BACKEND — PHASE 5 REPORT
+============================================
+Generated: 2026-08-10
+Repository: sophie-jarvis
+Version: 0.5.0
+
+1. BACKEND CREATED
+------------------
+src/platform/ApplicationBackend.ts          (interface)
+src/platform/MockApplicationBackend.ts
+src/platform/index.ts
+src/platform/macos/MacOSApplicationBackend.ts
+src/platform/macos/MacOSApplicationDiscovery.ts
+src/platform/macos/MacOSApplicationBackend.types.ts
+src/platform/macos/index.ts
+src/platform/macos/native/jarvis_macos_bridge.ts  (placeholder only)
+
+ApplicationService now depends on ApplicationBackend.
+Default backend: MacOSApplicationBackend.
+Tests: MockApplicationBackend / MockApplicationService.
+
+2. NATIVE APIs USED
+-------------------
+Intended (when optional N-API bridge is approved/compiled):
+- NSWorkspace / AppKit equivalents for open + running apps
+- Graceful terminate only (no force-quit)
+- Frontmost application query
+
+Shipped in Phase 5:
+- No compiled native addon
+- Optional load of ./native/jarvis_macos_bridge.js → absent/empty → bridge_missing
+- Read-only fs.access for configured .app path existence checks only
+- NO shell, NO scripting bridges, NO process-spawn
+
+3. CAPABILITIES AVAILABLE
+-------------------------
+- ApplicationBackend interface + capability status reports
+- Registry list/info via ApplicationService
+- MockApplicationBackend full lifecycle (in-memory)
+- MacOSApplicationBackend with injected test bridge (unit tests)
+- Path existence check for explicit .app paths (discovery helper)
+- Policy/denylist/resolver unchanged and still enforced before backend
+
+4. CAPABILITIES UNAVAILABLE (honest)
+------------------------------------
+Without N-API bridge (default production path):
+- openApplication → UNAVAILABLE
+- closeApplication → UNAVAILABLE
+- getActiveApplication → UNAVAILABLE
+- isApplicationRunning (system) → UNAVAILABLE
+- system-wide discovery → UNAVAILABLE
+
+5. PERMISSIONS REQUIRED
+-----------------------
+- Accessibility: may be required for frontmost app when bridge exists
+  → PERMISSION_REQUIRED (never bypassed, never auto-escalated)
+- No TCC prompts triggered by Phase 5 code without bridge
+
+6. TESTS
+--------
+jarvis-macos-application-backend-smoke.ts → 14/14 PASS
+(opt-in JARVIS_MACOS_SYSTEM_TESTS=1 available; no personal-app mutations)
+
+7. REGRESSION TESTS
+-------------------
+tsc --noEmit                              → PASS
+jarvis-core-smoke.ts                      → 22/22 PASS
+jarvis-observation-smoke.ts               → 15/15 PASS
+jarvis-observation-audit.ts               → PASS
+jarvis-file-control-smoke.ts              → 22/22 PASS
+jarvis-file-control-audit.ts              → PASS
+jarvis-application-control-smoke.ts       → 17/17 PASS
+jarvis-application-control-audit.ts       → PASS
+jarvis-macos-backend-audit.ts             → PASS
+
+8. SECURITY AUDIT
+-----------------
+jarvis-macos-backend-audit.ts PASSED
+Scans platform + applications (comments/strings stripped).
+No forbidden APIs detected.
+
+9. ABSENCE OF SHELL
+-------------------
+CONFIRMED: no child_process / exec / spawn / shell bridges.
+
+10. ABSENCE OF AppleScript / scripting bridges
+----------------------------------------------
+CONFIRMED: no osascript / arbitrary scripting APIs.
+
+11. ABSENCE OF FORCE KILL
+-------------------------
+CONFIRMED: no kill / killall / pkill / SIGKILL.
+Close contract is graceful terminate only (when bridge exists).
+
+12. ABSENCE OF UI AUTOMATION
+----------------------------
+CONFIRMED: no robotjs / nut.js / CGEvent / keyboard / mouse / clipboard automation.
+
+13. ABSENCE OF NETWORK
+----------------------
+CONFIRMED: no fetch / http clients added.
+
+14. ABSENCE OF CAMERA / MICROPHONE
+----------------------------------
+CONFIRMED: no media capture APIs.
+
+15. LIMITATIONS
+---------------
+- Real macOS open/close/active require a future approved compiled N-API bridge
+- Phase 5 ships the abstraction and honest UNAVAILABLE path
+- Security prioritized over functional coverage
+- No execute(command) / runShell / scripting APIs exist anywhere
+
+16. VERSION
+-----------
+0.5.0
+
+Phase 5 status: COMPLETE
+Phase 6: NOT STARTED — awaiting human validation.
+STOP.

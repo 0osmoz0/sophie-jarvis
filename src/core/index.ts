@@ -77,12 +77,16 @@ export {
   MockApplicationService,
   APPLICATION_ERROR_CODES,
   DENIED_SYSTEM_APPLICATIONS,
+  MockApplicationBackend,
+  MacOSApplicationBackend,
 } from "../applications/index.js";
 export type {
   ApplicationInfo as JarvisApplicationInfo,
   ApplicationResult,
   RegisteredApplication,
   ApplicationAuditEntry,
+  ApplicationBackend,
+  CapabilityReport,
 } from "../applications/index.js";
 
 export {

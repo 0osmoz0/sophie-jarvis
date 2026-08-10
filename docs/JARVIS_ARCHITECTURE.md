@@ -16,7 +16,11 @@ A **File Control Layer** (`src/files/`) provides sandboxed file actions via `fil
 
 ## Phase 4 note
 
-An **Application Control Layer** (`src/applications/`) provides lifecycle tools (`application.list|info|active|open|close`) with denylist and no UI automation. Real open/close await a native backend; tests use `MockApplicationService`. See [JARVIS_APPLICATION_CONTROL.md](./JARVIS_APPLICATION_CONTROL.md).
+An **Application Control Layer** (`src/applications/`) provides lifecycle tools (`application.list|info|active|open|close`) with denylist and no UI automation. See [JARVIS_APPLICATION_CONTROL.md](./JARVIS_APPLICATION_CONTROL.md).
+
+## Phase 5 note
+
+**ApplicationBackend** abstraction + **MacOSApplicationBackend**. Real open/close require an optional N-API NSWorkspace bridge (not shipped); without it capabilities stay `UNAVAILABLE` honestly. Tests use `MockApplicationBackend` / injected fake bridges.
 
 ---
 

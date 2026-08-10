@@ -42,6 +42,10 @@ export interface ApplicationAuditEntry {
   confirmation: boolean;
   result: "success" | "denied" | "error" | "unavailable" | "permission_required";
   errorCode?: string;
+  /** Phase 5 — optional backend metadata (never window/PII content). */
+  backend?: string | null;
+  capability?: string | null;
+  nativeStatus?: string | null;
 }
 
 export interface ApplicationAuditSink {
@@ -51,15 +55,20 @@ export interface ApplicationAuditSink {
 
 export const APPLICATION_ERROR_CODES = {
   INVALID_INPUT: "INVALID_INPUT",
+  INVALID_IDENTITY: "INVALID_IDENTITY",
   NOT_FOUND: "NOT_FOUND",
+  APPLICATION_NOT_FOUND: "APPLICATION_NOT_FOUND",
   DENIED: "DENIED",
+  APPLICATION_DENIED: "APPLICATION_DENIED",
   DENYLIST: "DENYLIST",
   BLOCKED_PATH: "BLOCKED_PATH",
   UNAVAILABLE: "UNAVAILABLE",
   PERMISSION_REQUIRED: "PERMISSION_REQUIRED",
   NOT_RUNNING: "NOT_RUNNING",
+  APPLICATION_NOT_RUNNING: "APPLICATION_NOT_RUNNING",
   ALREADY_RUNNING: "ALREADY_RUNNING",
   UNSUPPORTED: "UNSUPPORTED",
+  NATIVE_ERROR: "NATIVE_ERROR",
 } as const;
 
 /** System apps that must never be closed by JARVIS. */

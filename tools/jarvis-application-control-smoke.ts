@@ -301,8 +301,10 @@ async function main(): Promise<void> {
     });
     assert(r.success === false, "rejected");
     assert(
-      !r.success && r.error.code === APPLICATION_ERROR_CODES.INVALID_INPUT,
-      "INVALID_INPUT",
+      !r.success &&
+        (r.error.code === APPLICATION_ERROR_CODES.INVALID_INPUT ||
+          r.error.code === APPLICATION_ERROR_CODES.INVALID_IDENTITY),
+      "INVALID_IDENTITY",
     );
   });
 

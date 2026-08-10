@@ -27,3 +27,16 @@ export {
   MockApplicationService,
 } from "./ApplicationService.js";
 export type { ApplicationServiceOptions } from "./ApplicationService.js";
+
+export type {
+  ApplicationBackend,
+  BackendCapability,
+  CapabilityStatus,
+  CapabilityReport,
+  BackendApplicationIdentity,
+} from "../platform/index.js";
+export {
+  MockApplicationBackend,
+  MacOSApplicationBackend,
+  MacOSApplicationDiscovery,
+} from "../platform/index.js";

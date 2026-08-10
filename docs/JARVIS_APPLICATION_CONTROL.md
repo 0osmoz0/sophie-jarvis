@@ -6,6 +6,8 @@ JARVIS can manage **application lifecycle** only:
 
 It still **cannot** control application content (clicks, typing, UI scripting, browser automation, etc.).
 
+## Pipeline
+
 ```
 User / future AI
        ↓
@@ -21,12 +23,14 @@ ApplicationPolicy
        ↓
 ApplicationService
        ↓
-   macOS / Mock
+ApplicationBackend
+       ↓
+MacOS / Mock
        ↓
     Result
 ```
 
-No Tool may bypass `ApplicationService`.
+No Tool may bypass `ApplicationService`. No generic command execution API exists.
 
 ---
 
@@ -87,22 +91,63 @@ Confirmations reuse `PermissionManager` / `confirmTask` and are bound to a singl
 
 ## macOS permissions & availability
 
-| Capability | Phase 4 default |
-|------------|-----------------|
-| list/info from registry | Available |
-| frontmost (`active`) | `UNAVAILABLE` without Accessibility/native API (not bypassed) |
-| open | `UNAVAILABLE` without approved native backend (no `open`/`osascript`/shell) |
-| close | `UNAVAILABLE` without approved native backend (no `kill`/`SIGKILL`) |
+| Capability | Without N-API bridge | With approved NSWorkspace bridge |
+|------------|----------------------|----------------------------------|
+| list/info from registry | Available | Available |
+| system discovery | `UNAVAILABLE` | Via bridge |
+| frontmost (`active`) | `UNAVAILABLE` | May need Accessibility → `PERMISSION_REQUIRED` |
+| open | `UNAVAILABLE` | Typed open by bundleId/path |
+| close | `UNAVAILABLE` | Graceful terminate only (no force-kill) |
 
-`MockApplicationService` simulates open/close/active **in memory** for tests so we never close a user’s real apps during CI/smoke.
+`MockApplicationService` / `MockApplicationBackend` simulate lifecycle **in memory** for tests.
 
-System tests: set `JARVIS_APP_SYSTEM_TESTS=1` (still returns unavailable until a native backend exists).
+System tests: `JARVIS_MACOS_SYSTEM_TESTS=1` (never closes personal apps; mutations only if bridge present — still skipped for safety).
+
+---
+
+## Native macOS Backend (Phase 5)
+
+```
+ApplicationService
+       ↓
+ApplicationBackend (interface)
+       ↓
+MacOSApplicationBackend  ──optional──► N-API bridge (NSWorkspace)
+       ↓
+MockApplicationBackend (tests)
+```
+
+### APIs intended (when bridge is approved/compiled)
+
+- **NSWorkspace** / AppKit equivalents for open + running apps
+- **Graceful terminate** only (`terminate`, never force-quit)
+- Frontmost app query (may require Accessibility)
+
+### Not used
+
+- shell / process spawning
+- scripting bridges
+- force process termination
+- UI automation (clicks, keys, AX scripting)
+
+### Capability status
+
+```ts
+backend.getCapabilityStatus("openApplication")
+// { capability, status: "AVAILABLE" | "UNAVAILABLE" | "PERMISSION_REQUIRED", permission?, reason? }
+```
+
+Without the optional bridge module (`src/platform/macos/native/`), status is **UNAVAILABLE**. Security preferred over fake success.
+
+### Audit fields (Phase 5)
+
+Optional: `backend`, `capability`, `nativeStatus` — never window/clipboard/screen content.
 
 ---
 
 ## Audit log
 
-In-memory only: timestamp, taskId, toolId, action, application, bundleId, riskLevel, confirmation, result.
+In-memory only: timestamp, taskId, toolId, action, application, bundleId, riskLevel, confirmation, result (+ optional backend metadata).
 
 Never stores window contents, typed text, cookies, or personal data.
 
@@ -110,9 +155,9 @@ Never stores window contents, typed text, cookies, or personal data.
 
 ## No UI automation (critical)
 
-Phase 4 must **not** include:
+Phases 4–5 must **not** include:
 
-robotjs, nut.js, CGEvent, Accessibility UI actions, AppleScript UI scripting, clicks, keystrokes, clipboard automation, OCR, screen capture, browser automation.
+robotjs, nut.js, CGEvent, Accessibility UI actions, scripting UI automation, clicks, keystrokes, clipboard automation, OCR, screen capture, browser automation.
 
 ---
 
@@ -148,10 +193,10 @@ Then `confirmTask(taskId)`.
 
 ## Limitations
 
-- No shell / child_process / osascript
+- No shell / process spawning / scripting bridges
 - No force-kill
 - No UI / keyboard / mouse control
 - No Sophie direct access to ApplicationService
-- Real open/close await a future approved native macOS backend
+- Real open/close require an approved compiled native bridge (not shipped in Phase 5)
 
-**Do not start Phase 5** without human validation.
+**Do not start Phase 6** without human validation.

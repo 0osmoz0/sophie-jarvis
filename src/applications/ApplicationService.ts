@@ -11,31 +11,35 @@ import type {
   RegisteredApplication,
 } from "./types.js";
 import { APPLICATION_ERROR_CODES } from "./types.js";
+import type { ApplicationBackend } from "../platform/ApplicationBackend.js";
+import { MacOSApplicationBackend } from "../platform/macos/MacOSApplicationBackend.js";
+import { MockApplicationBackend } from "../platform/MockApplicationBackend.js";
 
 export interface ApplicationServiceOptions {
   registry?: ApplicationRegistry;
   resolver?: ApplicationResolver;
   policy?: ApplicationPolicy;
   audit?: ApplicationAuditSink;
+  /** Platform backend — defaults to MacOSApplicationBackend on darwin. */
+  backend?: ApplicationBackend;
+}
+
+function createDefaultBackend(): ApplicationBackend {
+  return new MacOSApplicationBackend({ skipNativeLoad: false });
 }
 
 /**
  * ApplicationService — sole gateway for application lifecycle.
  *
- * Phase 4 (Node, no native bindings, no shell / no scripting bridges):
- * - list/info from explicit registry (+ optional path existence check)
- * - active/open/close on the default macOS backend → UNAVAILABLE
- *   (safe native APIs would require TCC / native modules not enabled here)
- *
- * Use MockApplicationService in tests to exercise open/close without touching
- * the user's real apps. System tests are opt-in via JARVIS_APP_SYSTEM_TESTS=1
- * (still unavailable without a native backend).
+ * Phase 5: delegates open/close/active/running to ApplicationBackend.
+ * Policy + resolver remain mandatory before any backend mutation.
  */
 export class ApplicationService {
   readonly registry: ApplicationRegistry;
   readonly resolver: ApplicationResolver;
   readonly policy: ApplicationPolicy;
   readonly audit: ApplicationAuditSink;
+  readonly backend: ApplicationBackend;
 
   constructor(options: ApplicationServiceOptions = {}) {
     this.registry = options.registry ?? new ApplicationRegistry();
@@ -43,6 +47,20 @@ export class ApplicationService {
       options.resolver ?? new ApplicationResolver(this.registry);
     this.policy = options.policy ?? new ApplicationPolicy();
     this.audit = options.audit ?? new MemoryApplicationAuditLog();
+    this.backend = options.backend ?? createDefaultBackend();
+  }
+
+  getBackendCapabilities() {
+    return (
+      [
+        "listApplications",
+        "getApplicationInfo",
+        "isApplicationRunning",
+        "getActiveApplication",
+        "openApplication",
+        "closeApplication",
+      ] as const
+    ).map((c) => this.backend.getCapabilityStatus(c));
   }
 
   async list(): Promise<ApplicationResult<{ applications: ApplicationInfo[] }>> {
@@ -55,7 +73,14 @@ export class ApplicationService {
 
     const apps: ApplicationInfo[] = [];
     for (const reg of this.registry.list()) {
-      apps.push(await this.toInfo(reg, { running: null, active: null }));
+      const runningResult = await this.backend.isApplicationRunning({
+        id: reg.id,
+        name: reg.name,
+        bundleId: reg.bundleId,
+        path: reg.path,
+      });
+      const running = runningResult.success ? runningResult.data.running : null;
+      apps.push(this.toInfo(reg, { running, active: null }));
     }
 
     this.record({
@@ -66,6 +91,7 @@ export class ApplicationService {
       riskLevel: RiskLevel.LOW,
       confirmation: false,
       result: "success",
+      capability: "listApplications",
     });
 
     return { success: true, data: { applications: apps } };
@@ -79,24 +105,26 @@ export class ApplicationService {
   }): Promise<ApplicationResult<ApplicationInfo>> {
     const resolved = this.resolver.fromArgs(args);
     if (!resolved.ok) {
-      return this.fail("info", resolved.code, resolved.message, {
+      return this.fail("info", mapResolveCode(resolved.code), resolved.message, {
         application: typeof args.name === "string" ? args.name : null,
       });
     }
 
     const decision = this.policy.evaluate("info", resolved.app);
     if (!decision.allowed) {
-      return this.fail("info", decision.code ?? APPLICATION_ERROR_CODES.DENIED, decision.reason ?? "Denied", {
+      return this.fail("info", decision.code ?? APPLICATION_ERROR_CODES.APPLICATION_DENIED, decision.reason ?? "Denied", {
         application: resolved.app.name,
         bundleId: resolved.app.bundleId ?? null,
         risk: decision.riskLevel,
       });
     }
 
-    const info = await this.toInfo(resolved.app, {
-      running: await this.queryRunning(resolved.app),
-      active: null,
-    });
+    const runningResult = await this.backend.isApplicationRunning(
+      identityFrom(resolved.app),
+    );
+    const running = runningResult.success ? runningResult.data.running : null;
+
+    const info = this.toInfo(resolved.app, { running, active: null });
 
     this.record({
       action: "info",
@@ -106,6 +134,7 @@ export class ApplicationService {
       riskLevel: RiskLevel.LOW,
       confirmation: false,
       result: "success",
+      capability: "getApplicationInfo",
     });
 
     return { success: true, data: info };
@@ -119,26 +148,25 @@ export class ApplicationService {
       });
     }
 
-    // Frontmost app requires Accessibility / native APIs — not enabled in Phase 4.
+    const result = await this.backend.getActiveApplication();
+    if (!result.success) {
+      return this.fail("active", result.error.code, result.error.message, {
+        capability: "getActiveApplication",
+      });
+    }
+
     this.record({
       action: "active",
       toolId: "application.active",
-      application: null,
-      bundleId: null,
+      application: result.data?.name ?? null,
+      bundleId: result.data?.bundleId ?? null,
       riskLevel: RiskLevel.LOW,
       confirmation: false,
-      result: "unavailable",
-      errorCode: APPLICATION_ERROR_CODES.UNAVAILABLE,
+      result: "success",
+      capability: "getActiveApplication",
     });
 
-    return {
-      success: false,
-      error: {
-        code: APPLICATION_ERROR_CODES.UNAVAILABLE,
-        message:
-          "Frontmost application requires macOS Accessibility / native APIs not enabled in Phase 4. Returning unavailable (permission not bypassed).",
-      },
-    };
+    return result;
   }
 
   async open(
@@ -153,7 +181,7 @@ export class ApplicationService {
   ): Promise<ApplicationResult<ApplicationInfo>> {
     const resolved = this.resolver.fromArgs(args);
     if (!resolved.ok) {
-      return this.fail("open", resolved.code, resolved.message, {
+      return this.fail("open", mapResolveCode(resolved.code), resolved.message, {
         application: typeof args.name === "string" ? args.name : null,
         confirmation: !!args.confirmed,
         taskId: args.taskId,
@@ -163,19 +191,54 @@ export class ApplicationService {
 
     const decision = this.policy.evaluate("open", resolved.app);
     if (!decision.allowed) {
-      return this.fail("open", decision.code ?? APPLICATION_ERROR_CODES.DENIED, decision.reason ?? "Denied", {
+      return this.fail(
+        "open",
+        decision.code ?? APPLICATION_ERROR_CODES.APPLICATION_DENIED,
+        decision.reason ?? "Denied",
+        {
+          application: resolved.app.name,
+          bundleId: resolved.app.bundleId ?? null,
+          confirmation: !!args.confirmed,
+          taskId: args.taskId,
+          risk: decision.riskLevel,
+        },
+      );
+    }
+
+    const result = await this.backend.openApplication(identityFrom(resolved.app));
+    if (!result.success) {
+      return this.fail("open", result.error.code, result.error.message, {
         application: resolved.app.name,
         bundleId: resolved.app.bundleId ?? null,
         confirmation: !!args.confirmed,
         taskId: args.taskId,
-        risk: decision.riskLevel,
+        risk: RiskLevel.MEDIUM,
+        capability: "openApplication",
       });
     }
 
-    return this.performOpen(resolved.app, {
-      confirmed: !!args.confirmed,
-      taskId: args.taskId ?? null,
+    this.record({
+      action: "open",
+      toolId: "application.open",
+      application: resolved.app.name,
+      bundleId: resolved.app.bundleId ?? null,
+      riskLevel: RiskLevel.MEDIUM,
+      confirmation: !!args.confirmed,
+      result: "success",
+      taskId: args.taskId,
+      capability: "openApplication",
     });
+
+    return {
+      success: true,
+      data: {
+        ...result.data,
+        id: resolved.app.id,
+        name: resolved.app.name,
+        bundleId: resolved.app.bundleId ?? result.data.bundleId,
+        path: resolved.app.path ?? result.data.path,
+      },
+    };
   }
 
   async close(
@@ -190,7 +253,7 @@ export class ApplicationService {
   ): Promise<ApplicationResult<ApplicationInfo>> {
     const resolved = this.resolver.fromArgs(args);
     if (!resolved.ok) {
-      return this.fail("close", resolved.code, resolved.message, {
+      return this.fail("close", mapResolveCode(resolved.code), resolved.message, {
         application: typeof args.name === "string" ? args.name : null,
         confirmation: !!args.confirmed,
         taskId: args.taskId,
@@ -200,82 +263,60 @@ export class ApplicationService {
 
     const decision = this.policy.evaluate("close", resolved.app);
     if (!decision.allowed) {
-      return this.fail("close", decision.code ?? APPLICATION_ERROR_CODES.DENIED, decision.reason ?? "Denied", {
+      return this.fail(
+        "close",
+        decision.code ?? APPLICATION_ERROR_CODES.APPLICATION_DENIED,
+        decision.reason ?? "Denied",
+        {
+          application: resolved.app.name,
+          bundleId: resolved.app.bundleId ?? null,
+          confirmation: !!args.confirmed,
+          taskId: args.taskId,
+          risk: decision.riskLevel,
+        },
+      );
+    }
+
+    const result = await this.backend.closeApplication(identityFrom(resolved.app));
+    if (!result.success) {
+      return this.fail("close", result.error.code, result.error.message, {
         application: resolved.app.name,
         bundleId: resolved.app.bundleId ?? null,
         confirmation: !!args.confirmed,
         taskId: args.taskId,
-        risk: decision.riskLevel,
+        risk: RiskLevel.MEDIUM,
+        capability: "closeApplication",
       });
     }
 
-    return this.performClose(resolved.app, {
-      confirmed: !!args.confirmed,
-      taskId: args.taskId ?? null,
-    });
-  }
-
-  /** Default backend: no shell and no scripting bridge — open is unavailable. */
-  protected async performOpen(
-    app: RegisteredApplication,
-    meta: { confirmed: boolean; taskId: string | null },
-  ): Promise<ApplicationResult<ApplicationInfo>> {
-    this.record({
-      action: "open",
-      toolId: "application.open",
-      application: app.name,
-      bundleId: app.bundleId ?? null,
-      riskLevel: RiskLevel.MEDIUM,
-      confirmation: meta.confirmed,
-      result: "unavailable",
-      errorCode: APPLICATION_ERROR_CODES.UNAVAILABLE,
-      taskId: meta.taskId,
-    });
-    return {
-      success: false,
-      error: {
-        code: APPLICATION_ERROR_CODES.UNAVAILABLE,
-        message:
-          "Opening applications requires a safe native macOS API. Phase 4 forbids shell and process-spawning bridges; open is unavailable until a native backend is approved.",
-      },
-    };
-  }
-
-  /** Default backend: no forced termination APIs — close is unavailable. */
-  protected async performClose(
-    app: RegisteredApplication,
-    meta: { confirmed: boolean; taskId: string | null },
-  ): Promise<ApplicationResult<ApplicationInfo>> {
     this.record({
       action: "close",
       toolId: "application.close",
-      application: app.name,
-      bundleId: app.bundleId ?? null,
+      application: resolved.app.name,
+      bundleId: resolved.app.bundleId ?? null,
       riskLevel: RiskLevel.MEDIUM,
-      confirmation: meta.confirmed,
-      result: "unavailable",
-      errorCode: APPLICATION_ERROR_CODES.UNAVAILABLE,
-      taskId: meta.taskId,
+      confirmation: !!args.confirmed,
+      result: "success",
+      taskId: args.taskId,
+      capability: "closeApplication",
     });
+
     return {
-      success: false,
-      error: {
-        code: APPLICATION_ERROR_CODES.UNAVAILABLE,
-        message:
-          "Graceful application close requires a safe native macOS API. Phase 4 forbids forced process termination and scripting bridges; close is unavailable until a native backend is approved.",
+      success: true,
+      data: {
+        ...result.data,
+        id: resolved.app.id,
+        name: resolved.app.name,
+        bundleId: resolved.app.bundleId ?? result.data.bundleId,
+        path: resolved.app.path ?? result.data.path,
       },
     };
   }
 
-  protected async queryRunning(_app: RegisteredApplication): Promise<boolean | null> {
-    // Process listing would need shell/native — do not invent.
-    return null;
-  }
-
-  protected async toInfo(
+  protected toInfo(
     reg: RegisteredApplication,
     state: { running: boolean | null; active: boolean | null },
-  ): Promise<ApplicationInfo> {
+  ): ApplicationInfo {
     return {
       id: reg.id,
       name: reg.name,
@@ -296,6 +337,7 @@ export class ApplicationService {
       confirmation?: boolean;
       taskId?: string | null;
       risk?: RiskLevel;
+      capability?: string | null;
     } = {},
   ): ApplicationResult<never> {
     const resultKind =
@@ -304,6 +346,7 @@ export class ApplicationService {
         : code === APPLICATION_ERROR_CODES.PERMISSION_REQUIRED
           ? "permission_required"
           : code === APPLICATION_ERROR_CODES.DENIED ||
+              code === APPLICATION_ERROR_CODES.APPLICATION_DENIED ||
               code === APPLICATION_ERROR_CODES.DENYLIST ||
               code === APPLICATION_ERROR_CODES.BLOCKED_PATH
             ? "denied"
@@ -319,6 +362,7 @@ export class ApplicationService {
       result: resultKind,
       errorCode: code,
       taskId: meta.taskId,
+      capability: meta.capability,
     });
 
     return { success: false, error: { code, message } };
@@ -334,7 +378,13 @@ export class ApplicationService {
     result: "success" | "denied" | "error" | "unavailable" | "permission_required";
     errorCode?: string;
     taskId?: string | null;
+    capability?: string | null;
   }): void {
+    const nativeStatus =
+      this.backend instanceof MacOSApplicationBackend
+        ? this.backend.getNativeStatus()
+        : this.backend.name;
+
     this.audit.append({
       timestamp: new Date().toISOString(),
       taskId: partial.taskId ?? null,
@@ -346,104 +396,63 @@ export class ApplicationService {
       confirmation: partial.confirmation,
       result: partial.result,
       errorCode: partial.errorCode,
+      backend: this.backend.name,
+      capability: partial.capability ?? null,
+      nativeStatus,
     });
   }
 }
 
+function identityFrom(app: RegisteredApplication) {
+  return {
+    id: app.id,
+    name: app.name,
+    bundleId: app.bundleId ?? null,
+    path: app.path ?? null,
+  };
+}
+
+function mapResolveCode(code: string): string {
+  if (code === APPLICATION_ERROR_CODES.NOT_FOUND) {
+    return APPLICATION_ERROR_CODES.APPLICATION_NOT_FOUND;
+  }
+  if (code === APPLICATION_ERROR_CODES.INVALID_INPUT) {
+    return APPLICATION_ERROR_CODES.INVALID_IDENTITY;
+  }
+  return code;
+}
+
 /**
- * MockApplicationService — in-memory lifecycle for safe unit/smoke tests.
- * Does not touch real macOS apps. Never uses shell.
+ * MockApplicationService — ApplicationService + MockApplicationBackend.
+ * Seeds mock catalog from registry for safe tests.
  */
 export class MockApplicationService extends ApplicationService {
-  private readonly running = new Set<string>();
-  private activeId: string | null = null;
+  private readonly mockBackend: MockApplicationBackend;
 
-  protected override async queryRunning(app: RegisteredApplication): Promise<boolean | null> {
-    return this.running.has(app.id);
-  }
-
-  override async active(): Promise<ApplicationResult<ApplicationInfo | null>> {
-    if (!this.activeId) {
-      this.record({
-        action: "active",
-        toolId: "application.active",
-        application: null,
-        bundleId: null,
-        riskLevel: RiskLevel.LOW,
-        confirmation: false,
-        result: "success",
-      });
-      return { success: true, data: null };
-    }
-    const reg = this.registry.get(this.activeId);
-    if (!reg) {
-      return { success: true, data: null };
-    }
-    const info = await this.toInfo(reg, { running: true, active: true });
-    this.record({
-      action: "active",
-      toolId: "application.active",
-      application: info.name,
-      bundleId: info.bundleId ?? null,
-      riskLevel: RiskLevel.LOW,
-      confirmation: false,
-      result: "success",
+  constructor(options: Omit<ApplicationServiceOptions, "backend"> & {
+    backend?: MockApplicationBackend;
+  } = {}) {
+    const mockBackend = options.backend ?? new MockApplicationBackend();
+    const registry = options.registry ?? new ApplicationRegistry();
+    super({
+      ...options,
+      registry,
+      backend: mockBackend,
     });
-    return { success: true, data: info };
-  }
-
-  protected override async performOpen(
-    app: RegisteredApplication,
-    meta: { confirmed: boolean; taskId: string | null },
-  ): Promise<ApplicationResult<ApplicationInfo>> {
-    this.running.add(app.id);
-    this.activeId = app.id;
-    const info = await this.toInfo(app, { running: true, active: true });
-    this.record({
-      action: "open",
-      toolId: "application.open",
-      application: app.name,
-      bundleId: app.bundleId ?? null,
-      riskLevel: RiskLevel.MEDIUM,
-      confirmation: meta.confirmed,
-      result: "success",
-      taskId: meta.taskId,
-    });
-    return { success: true, data: info };
-  }
-
-  protected override async performClose(
-    app: RegisteredApplication,
-    meta: { confirmed: boolean; taskId: string | null },
-  ): Promise<ApplicationResult<ApplicationInfo>> {
-    if (!this.running.has(app.id)) {
-      return this.fail("close", APPLICATION_ERROR_CODES.NOT_RUNNING, `Application "${app.name}" is not running`, {
-        application: app.name,
+    this.mockBackend = mockBackend;
+    for (const app of registry.list()) {
+      this.mockBackend.register({
+        id: app.id,
+        name: app.name,
         bundleId: app.bundleId ?? null,
-        confirmation: meta.confirmed,
-        taskId: meta.taskId,
-        risk: RiskLevel.MEDIUM,
+        path: app.path ?? null,
+        running: false,
+        active: false,
       });
     }
-    this.running.delete(app.id);
-    if (this.activeId === app.id) this.activeId = null;
-    const info = await this.toInfo(app, { running: false, active: false });
-    this.record({
-      action: "close",
-      toolId: "application.close",
-      application: app.name,
-      bundleId: app.bundleId ?? null,
-      riskLevel: RiskLevel.MEDIUM,
-      confirmation: meta.confirmed,
-      result: "success",
-      taskId: meta.taskId,
-    });
-    return { success: true, data: info };
   }
 
-  /** Test helper — seed running state without open(). */
   mockSetRunning(id: string, running: boolean): void {
-    if (running) this.running.add(id);
-    else this.running.delete(id);
+    this.mockBackend.setRunning(id, running);
   }
 }

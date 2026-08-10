@@ -4,14 +4,15 @@
 
 Ce dépôt n’est **pas** Sophie. Sophie vit dans un autre repository ; l’intégration se fera plus tard via `SophieBridge`.
 
-## Phase 1 + Phase 2 + Phase 3 + Phase 4
+## Phase 1 → Phase 5
 
-- **Phase 1** : Core (Intent → PermissionManager → Tool)
-- **Phase 2** : Observation READ ONLY (`system.observe`)
-- **Phase 3** : File control sandbox (`file.*`)
-- **Phase 4** : Application lifecycle (`application.*`, no UI automation)
+- **Phase 1** : Core
+- **Phase 2** : Observation READ ONLY
+- **Phase 3** : File control sandbox
+- **Phase 4** : Application lifecycle tools + policy
+- **Phase 5** : `ApplicationBackend` + `MacOSApplicationBackend` (native bridge optional)
 
-Voir [docs/JARVIS_ARCHITECTURE.md](docs/JARVIS_ARCHITECTURE.md), [docs/JARVIS_OBSERVATION.md](docs/JARVIS_OBSERVATION.md), [docs/JARVIS_FILE_CONTROL.md](docs/JARVIS_FILE_CONTROL.md), [docs/JARVIS_APPLICATION_CONTROL.md](docs/JARVIS_APPLICATION_CONTROL.md).
+Voir la documentation dans `docs/`.
 
 ## Validation
 
@@ -25,4 +26,6 @@ npx --yes tsx tools/jarvis-file-control-smoke.ts
 npx --yes tsx tools/jarvis-file-control-audit.ts
 npx --yes tsx tools/jarvis-application-control-smoke.ts
 npx --yes tsx tools/jarvis-application-control-audit.ts
+npx --yes tsx tools/jarvis-macos-application-backend-smoke.ts
+npx --yes tsx tools/jarvis-macos-backend-audit.ts
 ```
