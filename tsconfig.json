@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "rootDir": ".",
+    "baseUrl": ".",
+    "paths": {
+      "@jarvis/*": ["src/*"]
+    }
+  },
+  "include": ["src/**/*", "tools/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
