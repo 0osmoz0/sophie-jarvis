@@ -1,7 +1,12 @@
 /**
- * Observation layer types — Phase 2.
+ * Observation layer types — Phase 2 (+ Phase 7 optional presence fields).
  * Unreachable values MUST be null (never invented).
  */
+
+import type {
+  UserActivitySnapshot,
+  UserPresenceSnapshot,
+} from "../presence/types.js";
 
 /** Coarse availability for an observation domain. */
 export type ObservationAvailability =
@@ -113,9 +118,19 @@ export interface ObservationSnapshot {
   processes: ProcessObservation;
   applications: ApplicationObservation;
   activeApplication: ApplicationInfo | null;
+  /** Phase 2 coarse activity (UNKNOWN when no native idle). */
   userActivity: UserActivityObservation;
   files: FileObservation;
   screen: ScreenSnapshot;
+  /**
+   * Phase 7 — aggregate activity signal from UserActivityService.
+   * Optional for backward compatibility.
+   */
+  activitySignal?: UserActivitySnapshot | null;
+  /**
+   * Phase 7 — presence inference (IDLE ≠ physical absence).
+   */
+  userPresence?: UserPresenceSnapshot | null;
 }
 
 export interface FileObserverConfig {

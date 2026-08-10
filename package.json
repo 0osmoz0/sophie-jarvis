@@ -1,6 +1,6 @@
 {
   "name": "sophie-jarvis",
-  "version": "0.6.0",
+  "version": "0.8.0",
   "description": "JARVIS Core — modular, permissioned tool execution foundation",
   "private": true,
   "type": "module",
@@ -16,7 +16,11 @@
     "smoke:macos": "tsx tools/jarvis-macos-application-backend-smoke.ts",
     "audit:macos": "tsx tools/jarvis-macos-backend-audit.ts",
     "smoke:screen": "tsx tools/jarvis-screen-observation-smoke.ts",
-    "audit:screen": "tsx tools/jarvis-screen-observation-audit.ts"
+    "audit:screen": "tsx tools/jarvis-screen-observation-audit.ts",
+    "smoke:presence": "tsx tools/jarvis-user-activity-smoke.ts",
+    "audit:presence": "tsx tools/jarvis-user-activity-audit.ts",
+    "smoke:actions": "tsx tools/jarvis-action-execution-smoke.ts",
+    "audit:actions": "tsx tools/jarvis-action-execution-audit.ts"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",

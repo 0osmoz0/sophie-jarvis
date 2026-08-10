@@ -23,6 +23,15 @@ export interface JarvisEventMap {
     previous: string;
     current: string;
   };
+  /** Phase 7 — aggregate idle signals (not security actions). */
+  user_became_idle: {
+    idleSeconds: number | null;
+    observedAt: number;
+  };
+  user_returned: {
+    idleSeconds: number | null;
+    observedAt: number;
+  };
   active_application_changed: {
     previous: string | null;
     current: string | null;

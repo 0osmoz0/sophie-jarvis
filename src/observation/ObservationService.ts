@@ -12,6 +12,8 @@ import type {
   ObservationSnapshot,
   UserActivityState,
 } from "./types.js";
+import type { UserActivityService } from "../presence/UserActivityService.js";
+import { presenceFromActivity } from "../presence/types.js";
 
 export interface ObservationServiceOptions extends ObservationServiceConfig {
   events?: EventBus;
@@ -21,6 +23,8 @@ export interface ObservationServiceOptions extends ObservationServiceConfig {
   userActivityObserver?: UserActivityObserver;
   fileObserverInstance?: FileObserver;
   screenObserver?: ScreenObserver;
+  /** Phase 7 optional presence/activity service. */
+  userActivityService?: UserActivityService;
 }
 
 const DEFAULT_CACHE_TTL_MS = 2_000;
@@ -38,6 +42,7 @@ export class ObservationService {
   private readonly fileObserver: FileObserver;
   private readonly screenObserver: ScreenObserver;
   private readonly cache: ObservationCache<ObservationSnapshot>;
+  private readonly userActivityService: UserActivityService | undefined;
 
   private lastUserActivity: UserActivityState | null = null;
   private lastActiveApplicationKey: string | null = null;
@@ -56,6 +61,7 @@ export class ObservationService {
       options.fileObserverInstance ??
       new FileObserver(options.files ?? { paths: [] });
     this.screenObserver = options.screenObserver ?? new ScreenObserver();
+    this.userActivityService = options.userActivityService;
     this.cache = new ObservationCache(
       options.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS,
     );
@@ -123,6 +129,22 @@ export class ObservationService {
     const activeApplication: ApplicationInfo | null =
       applications.activeApplication ?? null;
 
+    let activitySignal: ObservationSnapshot["activitySignal"] = null;
+    let userPresence: ObservationSnapshot["userPresence"] = null;
+    if (this.userActivityService) {
+      try {
+        const act = await this.userActivityService.getActivity();
+        if (act.success) {
+          activitySignal = act.data;
+          // Derive presence from the same snapshot — do not re-poll (state machine).
+          userPresence = presenceFromActivity(act.data.status);
+        }
+      } catch {
+        activitySignal = null;
+        userPresence = null;
+      }
+    }
+
     const snapshot: ObservationSnapshot = {
       timestamp,
       system,
@@ -132,6 +154,8 @@ export class ObservationService {
       userActivity,
       files,
       screen,
+      activitySignal,
+      userPresence,
     };
 
     this.emitChanges(snapshot);

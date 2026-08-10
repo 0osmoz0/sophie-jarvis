@@ -51,6 +51,32 @@ export { createScreenWindowsTool } from "../tools/screenWindows.js";
 export { createScreenActiveWindowTool } from "../tools/screenActiveWindow.js";
 export { createScreenSessionTool } from "../tools/screenSession.js";
 export { createScreenCaptureTool } from "../tools/screenCapture.js";
+export { registerPresenceTools } from "../tools/registerPresenceTools.js";
+export { createUserActivityTool } from "../tools/userActivity.js";
+export { createUserPresenceTool } from "../tools/userPresence.js";
+export { registerActionTools } from "../tools/registerActionTools.js";
+export { createActionPlanTool } from "../tools/actionPlan.js";
+export { createActionConfirmTool } from "../tools/actionConfirm.js";
+export { createActionExecuteTool } from "../tools/actionExecute.js";
+export { createActionCancelTool } from "../tools/actionCancel.js";
+
+export {
+  ActionService,
+  ActionRegistry,
+  ActionPlanner,
+  ActionRiskEvaluator,
+  ActionPermissionPolicy,
+  ActionConfirmation,
+  ActionExecutor,
+  MemoryActionAuditLog,
+  ACTION_ERROR_CODES,
+} from "../actions/index.js";
+export type {
+  ActionType,
+  ActionPlan,
+  ActionIntent,
+  ActionConfirmationToken,
+} from "../actions/index.js";
 
 export {
   ScreenService,
@@ -68,8 +94,25 @@ export type {
 } from "../screen/index.js";
 
 export {
+  UserActivityService,
+  MockUserActivityBackend,
+  UserActivityPolicy,
+  MemoryUserActivityAuditLog,
+  USER_ACTIVITY_ERROR_CODES,
+  presenceFromActivity,
+  idleSecondsToBucket,
+} from "../presence/index.js";
+export type {
+  UserActivityStatus,
+  UserActivitySnapshot,
+  UserPresenceSnapshot,
+  UserActivityBackend,
+} from "../presence/index.js";
+
+export {
   MacOSScreenBackend,
   MacOSWindowDiscovery,
+  MacOSUserActivityBackend,
 } from "../platform/macos/index.js";
 export { createApplicationListTool } from "../tools/applicationList.js";
 export { createApplicationInfoTool } from "../tools/applicationInfo.js";

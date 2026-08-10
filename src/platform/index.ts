@@ -13,6 +13,8 @@ export {
   MacOSScreenBackend,
   MacOSWindowDiscovery,
   tryLoadMacOSScreenBridge,
+  MacOSUserActivityBackend,
+  tryLoadMacOSUserActivityBridge,
 } from "./macos/index.js";
 export type {
   MacOSApplicationBackendOptions,
@@ -22,4 +24,7 @@ export type {
   MacOSScreenBackendOptions,
   MacOSScreenNativeBridge,
   MacOSScreenNativeStatus,
+  MacOSUserActivityBackendOptions,
+  MacOSUserActivityNativeBridge,
+  MacOSUserActivityNativeStatus,
 } from "./macos/index.js";

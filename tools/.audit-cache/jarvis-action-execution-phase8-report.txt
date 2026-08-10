@@ -1,0 +1,131 @@
+JARVIS CONTROLLED ACTION EXECUTION — PHASE 8 REPORT
+===================================================
+Generated: 2026-08-10
+Repository: sophie-jarvis
+Version: 0.8.0
+
+1. ARCHITECTURE
+---------------
+Intent → Plan → Risk → Permission → Confirmation → Execute → Result → Audit
+
+Intent → JarvisCore → PermissionManager → ActionTool
+  → ActionPermissionPolicy → ActionService → ActionExecutor
+  → FileService | ApplicationService
+
+Files:
+src/actions/types.ts
+src/actions/payloadValidation.ts
+src/actions/ActionRegistry.ts
+src/actions/ActionPlanner.ts
+src/actions/ActionRiskEvaluator.ts
+src/actions/ActionPermissionPolicy.ts
+src/actions/ActionConfirmation.ts
+src/actions/ActionExecutor.ts
+src/actions/ActionAuditLog.ts
+src/actions/ActionRollback.ts
+src/actions/ActionService.ts
+src/actions/index.ts
+src/tools/actionPlan.ts
+src/tools/actionConfirm.ts
+src/tools/actionExecute.ts
+src/tools/actionCancel.ts
+src/tools/registerActionTools.ts
+docs/JARVIS_ACTION_EXECUTION.md
+tools/jarvis-action-execution-smoke.ts
+tools/jarvis-action-execution-audit.ts
+tools/.audit-cache/jarvis-action-execution-phase8-report.txt (this file)
+
+2. ACTIONS AVAILABLE
+--------------------
+FILE_COPY   MEDIUM  → FileService.copy
+FILE_MOVE   MEDIUM  → FileService.move
+FILE_CREATE MEDIUM  → FileService.create
+FILE_DELETE HIGH    → FileService.delete
+APP_OPEN    MEDIUM  → ApplicationService.open
+APP_CLOSE   MEDIUM  → ApplicationService.close
+
+No generic/shell action. Typed payloads only.
+
+3. RISK MODEL
+-------------
+LOW / MEDIUM / HIGH / CRITICAL
+CRITICAL → always DENIED
+Unknown action → DENIED
+FILE_DELETE → HIGH; other Phase 8 mutations → MEDIUM
+
+4. CONFIRMATION MODEL
+---------------------
+ActionConfirmation binds taskId + actionType + payloadHash + expiresAt
+Single-use; cross-task and payload mismatch rejected
+Readable ActionConfirmationRequest (never "execute this command?")
+
+5. EXECUTOR
+-----------
+ActionExecutor delegates only to FileService / ApplicationService
+No direct node:fs, no native macOS APIs, no shell
+
+6. DRY-RUN
+----------
+plan/execute with dryRun:true describes effects without mutation
+Does not mark plan COMPLETED
+
+7. IDEMPOTENCE
+--------------
+COMPLETED taskId cannot execute again → ALREADY_COMPLETED
+
+8. CANCELLATION
+---------------
+cancel(taskId) before EXECUTING only
+After EXECUTING → CANCEL_UNAVAILABLE
+
+9. ROLLBACK
+-----------
+Conceptual ActionRollback:
+FILE_COPY → optional tracked destination delete when AVAILABLE
+FILE_MOVE / FILE_CREATE / APP_OPEN → UNAVAILABLE
+FILE_DELETE / APP_CLOSE → UNSUPPORTED
+
+10. AUDIT
+---------
+timestamp, taskId, actionType, riskLevel, confirmationState, status, resultCode
+Never secrets, file contents, passwords, screenshots, arbitrary commands
+
+11. SECURITY AUDIT
+------------------
+jarvis-action-execution-audit.ts PASSED (scans src/**/*.ts stripped)
+No child_process / exec / spawn / fork / shell / osascript / eval /
+Function / robotjs / nut.js / CGEvent / fetch / execute(command) patterns
+
+12. REGRESSION
+--------------
+tsc --noEmit                              → PASS
+Phase 1 core smoke                        → 22/22 PASS
+Phase 2 observation smoke + audit         → PASS
+Phase 3 file smoke + audit                → PASS
+Phase 4 application smoke + audit         → PASS
+Phase 5 macos backend smoke + audit       → PASS
+Phase 6 screen smoke + audit              → PASS
+Phase 7 user activity smoke + audit       → PASS
+Phase 8 action smoke + audit              → PASS
+
+13. TESTS
+---------
+jarvis-action-execution-smoke.ts → 24/24 PASS
+Covers: plan×6, unknown, malformed, confirmation, binding, expiry,
+cross-task, execution, dry-run, idempotence, cancel, timeout, audit,
+PermissionManager, rollback, CRITICAL, arbitrary command, tools, security audit
+
+14. LIMITATIONS
+---------------
+- No shell / arbitrary command path (by design)
+- Rollback mostly UNAVAILABLE/UNSUPPORTED in Phase 8
+- Timeout does not forcibly kill in-flight OS work
+- Free-form NL is not interpreted as system commands
+
+15. VERSION
+-----------
+0.8.0
+
+Phase 8 status: COMPLETE
+Phase 9: NOT STARTED — awaiting human validation.
+STOP.

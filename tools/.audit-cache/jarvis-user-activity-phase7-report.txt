@@ -1,0 +1,128 @@
+JARVIS USER ACTIVITY & PRESENCE — PHASE 7 REPORT
+================================================
+Generated: 2026-08-10
+Repository: sophie-jarvis
+Version: 0.7.0
+
+1. ARCHITECTURE
+---------------
+Intent → JarvisCore → PermissionManager → PresenceTool
+  → UserActivityPolicy → UserActivityService → UserActivityBackend
+  → MacOSUserActivityBackend | MockUserActivityBackend
+
+Observation only. No security actions from idle thresholds.
+
+Files:
+src/presence/types.ts
+src/presence/UserActivityBackend.ts
+src/presence/MockUserActivityBackend.ts
+src/presence/UserActivityPolicy.ts
+src/presence/UserActivityService.ts
+src/presence/UserActivityAuditLog.ts
+src/presence/index.ts
+src/platform/macos/MacOSUserActivityBackend.ts
+src/platform/macos/MacOSUserActivityBackend.types.ts
+src/platform/macos/native/jarvis_macos_user_activity_bridge.ts (placeholder)
+src/tools/userActivity.ts
+src/tools/userPresence.ts
+src/tools/registerPresenceTools.ts
+docs/JARVIS_USER_ACTIVITY.md
+tools/jarvis-user-activity-smoke.ts
+tools/jarvis-user-activity-audit.ts
+tools/.audit-cache/jarvis-user-activity-phase7-report.txt (this file)
+
+2. BACKEND
+----------
+UserActivityBackend methods: getActivitySnapshot, getIdleDuration, getCapabilityStatus
+No key/mouse event or history APIs.
+MockUserActivityBackend for tests (no real input).
+MacOSUserActivityBackend: aggregate idle only via optional native bridge.
+
+3. MACOS CAPABILITY
+-------------------
+Without approved N-API bridge → UNAVAILABLE / UNKNOWN (honest).
+Never fakes activity. No shell / event-tap fallback.
+Opt-in: JARVIS_MACOS_USER_ACTIVITY_TESTS=1 (idle duration read only).
+
+4. STATE MACHINE
+----------------
+ACTIVE --(idle >= idleThreshold)--> JUST_BECAME_IDLE --> IDLE
+IDLE   --(idle <= returnThreshold)--> JUST_RETURNED --> ACTIVE
+Statuses: ACTIVE | IDLE | JUST_BECAME_IDLE | JUST_RETURNED | UNKNOWN
+
+5. THRESHOLDS
+-------------
+idleThresholdSeconds = 30 (default behavioural only — not a security trigger)
+returnThresholdSeconds = 2 (hysteresis)
+Both configurable via UserActivityServiceConfig.
+
+6. PRESENCE MODEL
+-----------------
+PRESENT | IDLE | UNKNOWN
+IDLE = no aggregate activity detected — NOT physical absence.
+No camera / microphone / physical presence claim.
+
+7. CONFIDENCE
+-------------
+ACTIVE/JUST_RETURNED → PRESENT @ 1.0
+IDLE/JUST_BECAME_IDLE → IDLE @ 0.6
+UNKNOWN → UNKNOWN @ 0.0
+Software indicators only.
+
+8. PRIVACY
+----------
+Never records: keys, keycodes, mouse coords/trajectories/clicks,
+clipboard, screenshots, window timelines, app content, camera, mic.
+Audit: timestamp, toolId, taskId, status, idleBucket, capability, result
+Buckets: 0-5s | 5-30s | 30-60s | 1-5m | 5m+
+
+9. PERMISSIONS
+--------------
+user.activity LOW — { status, idleSeconds, source }
+user.presence LOW — { presence, confidence, reason }
+Policy: read-only; no security actions, capture, camera, audio input, alerts.
+
+10. TESTS
+---------
+jarvis-user-activity-smoke.ts → 17/17 PASS
+(covers mock states, thresholds, hysteresis, presence, confidence,
+ unavailable, policy, audit privacy, events, ObservationSnapshot,
+ malformed backend, tools, security audit)
+
+11. REGRESSION
+--------------
+tsc --noEmit                              → PASS
+Phase 1 core smoke                        → 22/22 PASS
+Phase 2 observation smoke + audit         → PASS
+Phase 3 file smoke + audit                → PASS
+Phase 4 application smoke + audit         → PASS
+Phase 5 macos backend smoke + audit       → PASS
+Phase 6 screen smoke + audit              → PASS
+Phase 7 user activity smoke + audit       → PASS
+
+12. SECURITY AUDIT
+------------------
+jarvis-user-activity-audit.ts PASSED (22 files scanned)
+Phase 1 security-invariants still PASS (via core smoke)
+
+13. FORBIDDEN APIs (confirmed absent)
+-------------------------------------
+child_process, exec/spawn/fork, shell, osascript/AppleScript,
+CGEventTap, IOHID interception, keyboard/mouse hooks, keylogger,
+mouse coordinates, clipboard, camera/audio capture APIs,
+fetch/HTTP clients
+
+14. LIMITATIONS
+---------------
+- Native aggregate idle requires approved bridge (not shipped)
+- IDLE ≠ physical absence
+- Events are signals only — Brain decides; no auto security/capture
+- Prefer on-demand reads; no aggressive polling
+
+15. VERSION
+-----------
+0.7.0
+
+Phase 7 status: COMPLETE
+Phase 8: NOT STARTED — awaiting human validation.
+STOP.

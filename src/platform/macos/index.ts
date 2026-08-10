@@ -20,3 +20,13 @@ export {
   tryLoadMacOSScreenBridge,
 } from "./MacOSScreenBackend.js";
 export type { MacOSScreenBackendOptions } from "./MacOSScreenBackend.js";
+
+export type {
+  MacOSUserActivityNativeBridge,
+  MacOSUserActivityNativeStatus,
+} from "./MacOSUserActivityBackend.types.js";
+export {
+  MacOSUserActivityBackend,
+  tryLoadMacOSUserActivityBridge,
+} from "./MacOSUserActivityBackend.js";
+export type { MacOSUserActivityBackendOptions } from "./MacOSUserActivityBackend.js";
