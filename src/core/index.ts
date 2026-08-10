@@ -44,6 +44,12 @@ export { createFileCopyTool } from "../tools/fileCopy.js";
 export { createFileMoveTool } from "../tools/fileMove.js";
 export { createFileCreateTool } from "../tools/fileCreate.js";
 export { createFileDeleteTool } from "../tools/fileDelete.js";
+export { registerApplicationTools } from "../tools/registerApplicationTools.js";
+export { createApplicationListTool } from "../tools/applicationList.js";
+export { createApplicationInfoTool } from "../tools/applicationInfo.js";
+export { createApplicationActiveTool } from "../tools/applicationActive.js";
+export { createApplicationOpenTool } from "../tools/applicationOpen.js";
+export { createApplicationCloseTool } from "../tools/applicationClose.js";
 
 export {
   FileService,
@@ -61,6 +67,23 @@ export type {
   FileAuditEntry,
   FileAuditSink,
 } from "../files/index.js";
+
+export {
+  ApplicationRegistry,
+  ApplicationResolver,
+  ApplicationPolicy,
+  MemoryApplicationAuditLog,
+  ApplicationService,
+  MockApplicationService,
+  APPLICATION_ERROR_CODES,
+  DENIED_SYSTEM_APPLICATIONS,
+} from "../applications/index.js";
+export type {
+  ApplicationInfo as JarvisApplicationInfo,
+  ApplicationResult,
+  RegisteredApplication,
+  ApplicationAuditEntry,
+} from "../applications/index.js";
 
 export {
   SystemObserver,

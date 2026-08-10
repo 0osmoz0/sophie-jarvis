@@ -1,0 +1,145 @@
+JARVIS APPLICATION CONTROL — PHASE 4 REPORT
+===========================================
+Generated: 2026-08-10
+Repository: sophie-jarvis
+App version: 0.4.0
+
+1. FILES CREATED
+----------------
+src/applications/types.ts
+src/applications/ApplicationRegistry.ts
+src/applications/ApplicationResolver.ts
+src/applications/ApplicationPolicy.ts
+src/applications/ApplicationAuditLog.ts
+src/applications/ApplicationService.ts
+src/applications/index.ts
+src/tools/applicationList.ts
+src/tools/applicationInfo.ts
+src/tools/applicationActive.ts
+src/tools/applicationOpen.ts
+src/tools/applicationClose.ts
+src/tools/registerApplicationTools.ts
+docs/JARVIS_APPLICATION_CONTROL.md
+tools/jarvis-application-control-smoke.ts
+tools/jarvis-application-control-audit.ts
+tools/.audit-cache/jarvis-application-control-phase4-report.txt (this file)
+
+Updated: package.json, README, architecture doc, core/index exports,
+systemInfo version, security-invariants allowlists, core smoke version assert.
+
+2. TOOLS CREATED
+----------------
+application.list
+application.info
+application.active
+application.open
+application.close
+
+Pipeline:
+Intent → JarvisCore → PermissionManager → ApplicationTool
+  → ApplicationPolicy → ApplicationService → Result
+
+3. RISK LEVELS
+--------------
+application.list   → LOW
+application.info   → LOW
+application.active → LOW
+application.open   → MEDIUM (confirmation)
+application.close  → MEDIUM (confirmation; denylist → DENIED)
+
+4. APPLICATION POLICY
+---------------------
+- Risk assignment per action
+- Denylist for critical system apps
+- Blocked path prefixes for open/close
+- Power verbs (shutdown/restart/logout/sleep) denied
+
+5. DENYLIST
+-----------
+Finder, Dock, WindowServer, loginwindow, launchd, SystemUIServer
+(+ matching bundle IDs)
+
+Blocked path prefixes for mutations:
+/System/*, /Library/*, /private/*, /usr/*, /bin/*, /sbin/*
+
+6. RESOLVER
+-----------
+Resolves name / bundleId / path / id from explicit registry only.
+Rejects command-like input (&&, ;, |, $, etc.) as INVALID_INPUT.
+Never treats identity as a shell command.
+
+7. REGISTRY
+-----------
+Explicit ApplicationRegistry — no shell discovery
+(no find/mdfind/ls/ps).
+
+8. PERMISSIONS / AVAILABILITY
+-----------------------------
+- list/info from registry: available
+- active (default service): UNAVAILABLE (Accessibility/native not enabled)
+- open/close (default service): UNAVAILABLE (no shell/scripting/force-kill)
+- MockApplicationService: in-memory open/close/active for safe tests
+- System tests opt-in: JARVIS_APP_SYSTEM_TESTS=1 (still unavailable)
+
+Permissions are never bypassed; TCC not prompted unnecessarily.
+
+9. TESTS
+--------
+npx tsc --noEmit                              → PASS
+jarvis-core-smoke.ts                          → 22/22 PASS
+jarvis-observation-smoke.ts                   → 15/15 PASS
+jarvis-observation-audit.ts                   → PASS
+jarvis-file-control-smoke.ts                  → 22/22 PASS
+jarvis-file-control-audit.ts                  → PASS
+jarvis-application-control-smoke.ts           → 17/17 PASS
+jarvis-application-control-audit.ts           → PASS
+
+10. SECURITY AUDIT
+------------------
+Application-control audit PASSED (52 source files).
+No child_process/exec/spawn, no scripting bridges, no force-kill APIs,
+no robotjs/nut.js/CGEvent, no fetch/camera/mic capture in src/.
+
+11. AUDIT LOG
+-------------
+MemoryApplicationAuditLog: timestamp, taskId, toolId, action,
+application, bundleId, riskLevel, confirmation, result.
+Never stores window contents / typed text / cookies / PII.
+
+12. DEPENDENCIES
+----------------
+Runtime dependencies: NONE
+No automation libraries added.
+
+13. LIMITATIONS
+---------------
+- Real open/close/active require a future approved native macOS backend
+- No UI automation, no content control inside apps
+- No shutdown/restart/logout/sleep
+- Registry must be configured explicitly
+
+14. NO UI AUTOMATION
+--------------------
+CONFIRMED: no robotjs, nut.js, CGEvent, AX UI scripting, clicks,
+keystrokes, clipboard automation, OCR, screen capture, browser automation.
+
+15. NO SHELL
+------------
+CONFIRMED: no child_process / exec / spawn / shell bridges.
+
+16. NO NETWORK
+--------------
+CONFIRMED: no fetch / http clients added.
+
+17. NO CAMERA / MICROPHONE
+--------------------------
+CONFIRMED: no media capture APIs.
+
+18. NO SOPHIE DIRECT ACCESS
+---------------------------
+CONFIRMED: SophieBridge remains decoupled; Sophie cannot call
+ApplicationService directly.
+
+Phase 4 status: COMPLETE
+Phase 5: NOT STARTED — awaiting human validation.
+STOP.

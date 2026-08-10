@@ -14,6 +14,10 @@ An **Observation Layer** (`src/observation/`) provides READ ONLY host snapshots 
 
 A **File Control Layer** (`src/files/`) provides sandboxed file actions via `file.*` tools. All mutations go through `FileService` after `FilePolicy` checks. See [JARVIS_FILE_CONTROL.md](./JARVIS_FILE_CONTROL.md).
 
+## Phase 4 note
+
+An **Application Control Layer** (`src/applications/`) provides lifecycle tools (`application.list|info|active|open|close`) with denylist and no UI automation. Real open/close await a native backend; tests use `MockApplicationService`. See [JARVIS_APPLICATION_CONTROL.md](./JARVIS_APPLICATION_CONTROL.md).
+
 ---
 
 ## Design principle
