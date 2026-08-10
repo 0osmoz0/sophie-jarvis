@@ -17,8 +17,16 @@ export interface JarvisEventMap {
   };
   task_completed: { taskId: string; toolId: string; result: unknown };
   task_failed: { taskId: string; toolId: string; error: string };
-  // Future (not implemented in Phase 1):
-  // security_alert, file_changed, process_started, download_detected, threat_returned
+  /** Phase 2 — observation layer */
+  observation_updated: { timestamp: string };
+  user_activity_changed: {
+    previous: string;
+    current: string;
+  };
+  active_application_changed: {
+    previous: string | null;
+    current: string | null;
+  };
 }
 
 export type JarvisEventName = keyof JarvisEventMap;

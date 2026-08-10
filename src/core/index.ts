@@ -36,6 +36,31 @@ export { isTool } from "../tools/Tool.js";
 export { ToolRegistry } from "../tools/ToolRegistry.js";
 export { systemInfoTool, JARVIS_APP_VERSION } from "../tools/systemInfo.js";
 export type { SystemInfoData } from "../tools/systemInfo.js";
+export { createSystemObserveTool } from "../tools/systemObserve.js";
+
+export {
+  SystemObserver,
+  ProcessObserver,
+  ApplicationObserver,
+  UserActivityObserver,
+  FileObserver,
+  ScreenObserver,
+  ObservationCache,
+  ObservationService,
+} from "../observation/index.js";
+export type {
+  ObservationSnapshot,
+  ObservationServiceConfig,
+  ObservationServiceOptions,
+  UserActivityState,
+  SystemObservation,
+  ProcessObservation,
+  ApplicationObservation,
+  UserActivityObservation,
+  FileObservation,
+  ScreenSnapshot,
+  FileObserverConfig,
+} from "../observation/index.js";
 
 export type {
   AIProvider,

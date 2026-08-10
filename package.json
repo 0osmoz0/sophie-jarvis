@@ -1,12 +1,14 @@
 {
   "name": "sophie-jarvis",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "JARVIS Core — modular, permissioned tool execution foundation (Phase 1)",
   "private": true,
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "smoke": "tsx tools/jarvis-core-smoke.ts"
+    "smoke": "tsx tools/jarvis-core-smoke.ts",
+    "smoke:observation": "tsx tools/jarvis-observation-smoke.ts",
+    "audit:observation": "tsx tools/jarvis-observation-audit.ts"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",

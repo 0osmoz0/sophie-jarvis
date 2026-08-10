@@ -6,6 +6,12 @@ Sophie remains in a separate repository. Integration will happen later through `
 
 ---
 
+## Phase 2 note
+
+An **Observation Layer** (`src/observation/`) provides READ ONLY host snapshots via `system.observe` (LOW). See [JARVIS_OBSERVATION.md](./JARVIS_OBSERVATION.md). Process/app/idle/screen capture remain unavailable without shell or privileged APIs — intentionally.
+
+---
+
 ## Design principle
 
 JARVIS Core is intentionally **inoffensive** in Phase 1. No camera, microphone, screen capture, keyboard, mouse, terminal, shell, file mutation, network, browser, Gmail, SMS, calls, GPS, antivirus, real LLM, vision, STT, or TTS.

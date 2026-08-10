@@ -125,6 +125,87 @@ const ALLOWLIST: Array<{ fileSubstring: string; patternNames: string[] }> = [
       "camera access",
     ],
   },
+  {
+    fileSubstring: "JARVIS_OBSERVATION.md",
+    patternNames: [
+      "microphone",
+      "camera access",
+      "child_process",
+      "exec(",
+      "spawn(",
+      "eval(",
+      "fetch to external",
+      "openai",
+      "ollama",
+      "Gmail API",
+      "SMS / telephony",
+      "fs writeFile",
+      "fs unlink",
+      "fs rm",
+    ],
+  },
+  {
+    fileSubstring: "jarvis-observation-audit.ts",
+    patternNames: [
+      "child_process",
+      "exec(",
+      "execSync(",
+      "spawn(",
+      "spawnSync(",
+      "fork(",
+      "eval(",
+      "Function constructor",
+      "shell:true",
+      "/bin/sh",
+      "cmd.exe",
+      "powershell",
+      "navigator.mediaDevices",
+      "getUserMedia",
+      "webkitGetUserMedia",
+      "MediaRecorder",
+      "camera access",
+      "microphone",
+      "Robot / nut.js keyboard",
+      "net socket client",
+      "http request",
+      "https request",
+      "fetch to external",
+      "axios",
+      "openai",
+      "ollama",
+      "fs writeFile",
+      "fs unlink",
+      "fs rm",
+      "fs mkdir write",
+      "SMS / telephony",
+      "Gmail API",
+      "Sophie repo import",
+    ],
+  },
+  {
+    fileSubstring: "jarvis-observation-smoke.ts",
+    patternNames: ["microphone", "openai", "ollama"],
+  },
+  {
+    fileSubstring: "jarvis-observation-phase2-report.txt",
+    patternNames: [
+      "microphone",
+      "openai",
+      "ollama",
+      "Gmail API",
+      "Sophie repo import",
+      "child_process",
+      "exec(",
+      "spawn(",
+      "eval(",
+      "fetch to external",
+      "camera access",
+      "SMS / telephony",
+      "fs writeFile",
+      "fs unlink",
+      "fs rm",
+    ],
+  },
 ];
 
 async function walk(dir: string): Promise<string[]> {
@@ -194,7 +275,7 @@ export async function runSecurityInvariants(): Promise<InvariantReport> {
     devDependencies?: Record<string, string>;
   };
   if (pkg.dependencies && Object.keys(pkg.dependencies).length > 0) {
-    failures.push("package.json: Phase 1 must have zero runtime dependencies");
+    failures.push("package.json: Phase 1–2 must have zero runtime dependencies");
   }
   const forbiddenDeps = ["openai", "ollama", "axios", "node-fetch", "puppeteer", "playwright", "robotjs"];
   const allDeps = {

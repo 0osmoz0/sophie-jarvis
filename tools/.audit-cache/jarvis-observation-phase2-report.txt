@@ -1,0 +1,157 @@
+JARVIS OBSERVATION — PHASE 2 REPORT
+===================================
+Generated: 2026-08-10T14:35:00Z (approx)
+Repository: sophie-jarvis
+App version: 0.2.0
+
+1. OBSERVERS CREATED
+--------------------
+src/observation/types.ts
+src/observation/SystemObserver.ts
+src/observation/ProcessObserver.ts
+src/observation/ApplicationObserver.ts
+src/observation/UserActivityObserver.ts
+src/observation/FileObserver.ts
+src/observation/ScreenObserver.ts
+src/observation/ObservationCache.ts
+src/observation/ObservationService.ts
+src/observation/index.ts
+src/tools/systemObserve.ts  (Tool: system.observe, RiskLevel LOW)
+
+Events added to EventBus:
+- observation_updated
+- user_activity_changed
+- active_application_changed
+
+Docs:
+- docs/JARVIS_OBSERVATION.md
+
+Tests / audit:
+- tools/jarvis-observation-smoke.ts
+- tools/jarvis-observation-audit.ts
+- tools/.audit-cache/jarvis-observation-phase2-report.txt (this file)
+
+2. INFORMATION ACTUALLY AVAILABLE
+---------------------------------
+Via Node `os` (SystemObserver):
+- OS platform
+- architecture
+- hostname (when available)
+- CPU model / speedMHz / core count
+- total memory / free memory
+- uptime seconds
+
+Via FileObserver (only if paths explicitly configured; default none):
+- shallow directory entry metadata (name, path, isDirectory, size, mtime)
+
+Via system.observe → ObservationService:
+- Structured ObservationSnapshot aggregating all domains
+- In-memory cache (default TTL 2s)
+
+3. INFORMATION UNAVAILABLE (intentionally null / unavailable)
+-------------------------------------------------------------
+- Battery percent / charging state
+- Full process list (pid/name/cpu/mem table)
+- Open GUI applications / bundle IDs
+- Active (frontmost) application
+- User ACTIVE/IDLE from real HID idle time → state UNKNOWN
+- Screen dimensions / display count / pixels
+- Any configured file paths by default (paths: [])
+
+Reasons: would require shell (`ps`), AppleScript, Accessibility,
+native bindings, or Screen Recording — all rejected for Phase 2 safety.
+
+4. PERMISSIONS REQUIRED
+-----------------------
+- Basic os.* metadata: none
+- Process list: not implemented (would need shell/native)
+- Apps / frontmost: not implemented (Accessibility / AppleScript)
+- Idle detection: not implemented (native input API)
+- File listing: filesystem read on user-configured paths only
+- Screen Recording: NOT requested
+
+No macOS permission prompts are triggered by Phase 2 code.
+Permissions are never bypassed; unavailable domains return explicit status.
+
+5. TESTS
+--------
+npx tsc --noEmit                         → PASS
+npx tsx tools/jarvis-core-smoke.ts       → 22/22 PASS (Phase 1 still green)
+npx tsx tools/jarvis-observation-smoke.ts → 15/15 PASS
+npx tsx tools/jarvis-observation-audit.ts → PASS
+
+Smoke coverage:
+1. SystemObserver
+2. ProcessObserver
+3. ApplicationObserver
+4. UserActivityObserver
+5. FileObserver
+6. ScreenObserver
+7. ObservationService (+ isolated observer failure)
+8. system.observe via JarvisCore
+9. PermissionManager gating
+10. in-memory cache
+11. EventBus observation_updated
++ no invented data, no key logging, no screen image, empty file paths default
+
+6. SECURITY AUDIT
+-----------------
+tools/jarvis-observation-audit.ts scans src/**/*.ts with comments/strings
+stripped and confirms absence of:
+exec/spawn/fork/child_process, shell:true, rm/unlink/writeFile/appendFile/
+rename/chmod/kill, fetch, camera/mic capture APIs, robotjs/nut, osascript, eval
+
+Result: PASSED (26 source files scanned)
+Phase 1 security-invariants also still PASS.
+
+7. DEPENDENCIES ADDED
+---------------------
+Runtime dependencies: NONE (still empty)
+devDependencies unchanged: typescript, tsx, @types/node
+No native modules, no LLM SDKs, no automation libraries.
+
+8. macOS LIMITATIONS
+--------------------
+Target: macOS Apple Silicon primarily, but APIs are not assumed present.
+- Process / app / idle / battery / screen geometry: unavailable without
+  privileged or shell APIs → explicit unavailable/null
+- No TCC prompts issued
+- No permission circumvention
+
+9. PERSONAL DATA NOT COLLECTED
+------------------------------
+Never collected / never stored:
+- Keystroke content / typed text / key codes
+- Mouse coordinates / click streams
+- Window contents / OCR
+- Screenshots / image buffers
+- Full-disk file inventory
+- Mail, SMS, calls, contacts, browser history
+- Network destinations
+
+FileObserver default watches zero paths (data minimization).
+
+10. READ ONLY CONFIRMATION
+--------------------------
+CONFIRMED: Phase 2 is READ ONLY observation.
+- No system mutation tools
+- No AppleScript actions
+- No clicks / keystrokes / mouse control
+- No file create/modify/delete/rename
+- No process kill/launch
+- No installs / network / LLM
+
+Architecture path:
+
+  Mac → Observation Layer → ObservationSnapshot
+      → JarvisCore (system.observe) → PermissionManager → Result
+
+11. DANGEROUS ACCESS CONFIRMATION
+---------------------------------
+CONFIRMED: No dangerous access was added.
+JARVIS can OBSERVE (within honest availability limits).
+JARVIS still cannot ACT.
+
+Phase 2 status: COMPLETE
+Phase 3: NOT STARTED — awaiting human validation.
+STOP.

@@ -4,23 +4,12 @@
 
 Ce dépôt n’est **pas** Sophie. Sophie vit dans un autre repository ; l’intégration se fera plus tard via `SophieBridge`.
 
-## Phase 1 (actuelle)
+## Phase 1 + Phase 2
 
-Architecture modulaire, typée et **inoffensive** :
+- **Phase 1** : Core (Intent → PermissionManager → Tool)
+- **Phase 2** : Observation READ ONLY (`system.observe`)
 
-- `JarvisCore` + `Intent` structurée
-- `Tool` / `ToolRegistry`
-- `PermissionManager` + `RiskLevel`
-- `TaskManager` + `EventBus` + `Context`
-- Outil unique : `system.info` (LOW, lecture seule)
-- `MockAIProvider` (aucun LLM externe)
-- `SophieBridge` découplé (stub)
-
-Aucune capacité dangereuse (shell, réseau, caméra, fichiers, etc.).
-
-## Documentation
-
-Voir [docs/JARVIS_ARCHITECTURE.md](docs/JARVIS_ARCHITECTURE.md).
+Voir [docs/JARVIS_ARCHITECTURE.md](docs/JARVIS_ARCHITECTURE.md) et [docs/JARVIS_OBSERVATION.md](docs/JARVIS_OBSERVATION.md).
 
 ## Validation
 
@@ -28,4 +17,6 @@ Voir [docs/JARVIS_ARCHITECTURE.md](docs/JARVIS_ARCHITECTURE.md).
 npm install
 npx tsc --noEmit
 npx --yes tsx tools/jarvis-core-smoke.ts
+npx --yes tsx tools/jarvis-observation-smoke.ts
+npx --yes tsx tools/jarvis-observation-audit.ts
 ```
