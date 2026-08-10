@@ -1,0 +1,143 @@
+JARVIS FILE CONTROL — PHASE 3 REPORT
+====================================
+Generated: 2026-08-10
+Repository: sophie-jarvis
+App version: 0.3.0
+
+1. FILES CREATED
+----------------
+src/files/types.ts
+src/files/FilePathResolver.ts
+src/files/FilePolicy.ts
+src/files/FileAuditLog.ts
+src/files/FileService.ts
+src/files/index.ts
+src/tools/fileList.ts
+src/tools/fileInfo.ts
+src/tools/fileCopy.ts
+src/tools/fileMove.ts
+src/tools/fileCreate.ts
+src/tools/fileDelete.ts
+src/tools/registerFileTools.ts
+docs/JARVIS_FILE_CONTROL.md
+tools/jarvis-file-control-smoke.ts
+tools/jarvis-file-control-audit.ts
+tools/.audit-cache/jarvis-file-control-phase3-report.txt (this file)
+
+Updated:
+- src/core/index.ts (exports)
+- src/tools/systemInfo.ts (version 0.3.0)
+- package.json / README / .gitignore
+- tools/security-invariants.ts (FileService allowlist)
+- tools/jarvis-observation-audit.ts (FileService mutate allow)
+- tools/jarvis-core-smoke.ts (version assert)
+
+2. TOOLS CREATED
+----------------
+file.list
+file.info
+file.copy
+file.move
+file.create
+file.delete
+
+Pipeline enforced:
+Intent → JarvisCore → PermissionManager → FileTool → FilePolicy → FileService → Result
+
+3. RISK LEVELS
+--------------
+file.list   → LOW
+file.info   → LOW
+file.copy   → MEDIUM
+file.move   → MEDIUM
+file.create → MEDIUM
+file.delete → HIGH
+CRITICAL not used for file tools.
+
+4. FILEPOLICY
+-------------
+- Default allowed paths: []
+- setAllowedPaths([...]) required before any access
+- Hard-blocked prefixes: /, ~/Library, /System, /Library, /etc,
+  /private, /var, ~/.ssh, ~/.aws, ~/.config
+- Checks absolute + realpath + parentReal
+- Symlink escape → DENIED (SYMLINK_ESCAPE / DENIED)
+
+5. ALLOWED PATHS (tests)
+------------------------
+tools/.tmp/jarvis-files/sandbox
+  ├── hello.txt
+  ├── test.txt
+  └── archive/
+Never tests against ~/Downloads, ~/Desktop, or personal data.
+
+6. TESTS
+--------
+npx tsc --noEmit                         → PASS
+npx tsx tools/jarvis-core-smoke.ts       → 22/22 PASS
+npx tsx tools/jarvis-observation-smoke.ts → 15/15 PASS
+npx tsx tools/jarvis-observation-audit.ts → PASS
+npx tsx tools/jarvis-file-control-smoke.ts → 22/22 PASS
+npx tsx tools/jarvis-file-control-audit.ts → PASS
+
+7. SECURITY AUDIT
+-----------------
+File-control audit PASSED (39 source files):
+- Mutating fs only in FileService
+- Tools do not import node:fs
+- No shell/exec/spawn/osascript/fetch/eval/camera APIs
+
+8. PATH TRAVERSAL TESTS
+-----------------------
+../ denied
+../../ denied
+URL-encoded .. denied
+absolute outside sandbox denied
+/System via file.list → tool fails controlled
+
+9. SYMLINK TESTS
+----------------
+Symlink inside sandbox → outside file → DENIED
+(fallback: absolute outside path denied if symlink creation unavailable)
+
+10. CONFIRMATION TESTS
+----------------------
+MEDIUM/HIGH wait for confirmation before execute
+delete without confirmation → file remains
+confirmation token bound to single taskId (cross-task rejected)
+
+11. AUDIT LOG
+-------------
+MemoryFileAuditLog records timestamp, taskId, toolId, operation,
+source, destination, riskLevel, confirmation, result.
+Never stores file contents.
+Interface FileAuditSink ready for future secure storage.
+
+12. DEPENDENCIES
+----------------
+Runtime dependencies: NONE
+devDependencies unchanged (typescript, tsx, @types/node)
+
+13. LIMITATIONS
+---------------
+- No arbitrary filesystem access
+- No directory delete / recursive delete
+- file.create: simple text extensions only
+- No binary/script/launch-agent creation
+- No overwrite without explicit overwrite:true
+- Dry-run via FileService.plan / dryRun:true (no mutation)
+- Observation layer process/app/screen still unavailable (Phase 2)
+
+14. SOPHIE NOT DIRECTLY CONNECTED
+---------------------------------
+CONFIRMED: Sophie has no FileService access.
+SophieBridge remains a stub; no behavioral wiring to files.
+
+15. NO SHELL / NETWORK / CAMERA / MICROPHONE
+--------------------------------------------
+CONFIRMED: Phase 3 did not add shell, network, camera, or microphone.
+Only controlled file operations inside an explicit sandbox.
+
+Phase 3 status: COMPLETE
+Phase 4: NOT STARTED — awaiting human validation.
+STOP.

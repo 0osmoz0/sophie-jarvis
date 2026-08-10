@@ -37,6 +37,30 @@ export { ToolRegistry } from "../tools/ToolRegistry.js";
 export { systemInfoTool, JARVIS_APP_VERSION } from "../tools/systemInfo.js";
 export type { SystemInfoData } from "../tools/systemInfo.js";
 export { createSystemObserveTool } from "../tools/systemObserve.js";
+export { registerFileTools } from "../tools/registerFileTools.js";
+export { createFileListTool } from "../tools/fileList.js";
+export { createFileInfoTool } from "../tools/fileInfo.js";
+export { createFileCopyTool } from "../tools/fileCopy.js";
+export { createFileMoveTool } from "../tools/fileMove.js";
+export { createFileCreateTool } from "../tools/fileCreate.js";
+export { createFileDeleteTool } from "../tools/fileDelete.js";
+
+export {
+  FileService,
+  FilePolicy,
+  FilePathResolver,
+  MemoryFileAuditLog,
+  FILE_ERROR_CODES,
+} from "../files/index.js";
+export type {
+  FileResult,
+  FileError,
+  FileListEntry,
+  FileInfoData,
+  DryRunPlan,
+  FileAuditEntry,
+  FileAuditSink,
+} from "../files/index.js";
 
 export {
   SystemObserver,

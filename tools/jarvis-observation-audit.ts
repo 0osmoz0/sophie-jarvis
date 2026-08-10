@@ -86,8 +86,21 @@ export async function runObservationAudit(): Promise<AuditReport> {
     const raw = await fs.readFile(file, "utf8");
     const code = stripCommentsAndStrings(raw);
     const rel = path.relative(ROOT, file);
+    const isFileService =
+      rel.replace(/\\/g, "/").endsWith("files/FileService.ts");
 
     for (const { name, pattern } of FORBIDDEN) {
+      // Phase 3: mutating fs is allowed only inside FileService
+      if (
+        isFileService &&
+        (name === "rm(" ||
+          name === "unlink(" ||
+          name === "writeFile(" ||
+          name === "appendFile(" ||
+          name === "rename(")
+      ) {
+        continue;
+      }
       if (pattern.test(code)) {
         failures.push(`${rel}: code pattern "${name}"`);
       }

@@ -10,6 +10,10 @@ Sophie remains in a separate repository. Integration will happen later through `
 
 An **Observation Layer** (`src/observation/`) provides READ ONLY host snapshots via `system.observe` (LOW). See [JARVIS_OBSERVATION.md](./JARVIS_OBSERVATION.md). Process/app/idle/screen capture remain unavailable without shell or privileged APIs — intentionally.
 
+## Phase 3 note
+
+A **File Control Layer** (`src/files/`) provides sandboxed file actions via `file.*` tools. All mutations go through `FileService` after `FilePolicy` checks. See [JARVIS_FILE_CONTROL.md](./JARVIS_FILE_CONTROL.md).
+
 ---
 
 ## Design principle
