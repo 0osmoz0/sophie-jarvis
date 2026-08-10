@@ -22,6 +22,10 @@ An **Application Control Layer** (`src/applications/`) provides lifecycle tools 
 
 **ApplicationBackend** abstraction + **MacOSApplicationBackend**. Real open/close require an optional N-API NSWorkspace bridge (not shipped); without it capabilities stay `UNAVAILABLE` honestly. Tests use `MockApplicationBackend` / injected fake bridges.
 
+## Phase 6 note
+
+**Screen observation** (`src/screen/`, `screen.*` tools): displays, windows, session, explicit HIGH-risk capture. `MacOSScreenBackend` stays `UNAVAILABLE` without an approved ScreenCaptureKit bridge. See [JARVIS_SCREEN_OBSERVATION.md](./JARVIS_SCREEN_OBSERVATION.md).
+
 ---
 
 ## Design principle

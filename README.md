@@ -4,15 +4,12 @@
 
 Ce dépôt n’est **pas** Sophie. Sophie vit dans un autre repository ; l’intégration se fera plus tard via `SophieBridge`.
 
-## Phase 1 → Phase 5
+## Phase 1 → Phase 6
 
-- **Phase 1** : Core
-- **Phase 2** : Observation READ ONLY
-- **Phase 3** : File control sandbox
-- **Phase 4** : Application lifecycle tools + policy
-- **Phase 5** : `ApplicationBackend` + `MacOSApplicationBackend` (native bridge optional)
+- **Phase 1–5** : Core, observation, files, applications, macOS app backend
+- **Phase 6** : Screen / window observation (`screen.*`) — observe only, no UI control
 
-Voir la documentation dans `docs/`.
+Voir `docs/`, notamment [JARVIS_SCREEN_OBSERVATION.md](docs/JARVIS_SCREEN_OBSERVATION.md).
 
 ## Validation
 
@@ -28,4 +25,6 @@ npx --yes tsx tools/jarvis-application-control-smoke.ts
 npx --yes tsx tools/jarvis-application-control-audit.ts
 npx --yes tsx tools/jarvis-macos-application-backend-smoke.ts
 npx --yes tsx tools/jarvis-macos-backend-audit.ts
+npx --yes tsx tools/jarvis-screen-observation-smoke.ts
+npx --yes tsx tools/jarvis-screen-observation-audit.ts
 ```

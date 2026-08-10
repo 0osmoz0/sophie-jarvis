@@ -1,0 +1,117 @@
+JARVIS SCREEN OBSERVATION — PHASE 6 REPORT
+==========================================
+Generated: 2026-08-10
+Repository: sophie-jarvis
+Version: 0.6.0
+
+1. FILES CREATED
+----------------
+src/screen/types.ts
+src/screen/ScreenBackend.ts
+src/screen/MockScreenBackend.ts
+src/screen/ScreenPolicy.ts
+src/screen/ScreenService.ts
+src/screen/ScreenAuditLog.ts
+src/screen/index.ts
+src/platform/macos/MacOSScreenBackend.ts
+src/platform/macos/MacOSWindowDiscovery.ts
+src/platform/macos/MacOSScreenBackend.types.ts
+src/platform/macos/native/jarvis_macos_screen_bridge.ts (placeholder)
+src/tools/screenInfo.ts
+src/tools/screenWindows.ts
+src/tools/screenActiveWindow.ts
+src/tools/screenSession.ts
+src/tools/screenCapture.ts
+src/tools/registerScreenTools.ts
+docs/JARVIS_SCREEN_OBSERVATION.md
+tools/jarvis-screen-observation-smoke.ts
+tools/jarvis-screen-observation-audit.ts
+tools/.audit-cache/jarvis-screen-observation-phase6-report.txt (this file)
+
+2. ARCHITECTURE
+---------------
+Intent → JarvisCore → PermissionManager → ScreenTool
+  → ScreenPolicy → ScreenService → ScreenBackend
+  → MacOSScreenBackend | MockScreenBackend
+
+Observation only. No UI control APIs.
+
+3. SCREEN CAPABILITIES
+----------------------
+screen.info (LOW): display count, dimensions, primary, scale, bounds
+MacOS without bridge: UNAVAILABLE (honest)
+Mock: AVAILABLE
+
+4. WINDOW CAPABILITIES
+----------------------
+screen.windows (LOW): id, title, app, bundleId, bounds, visible, minimized
+No pixels / OCR / document contents
+May be PERMISSION_REQUIRED / UNAVAILABLE
+
+5. SESSION CAPABILITIES
+-----------------------
+screen.session (LOW): locked / userPresent as boolean|null
+Never invents absence from idle heuristics
+Without bridge: { locked: null, userPresent: null }
+
+6. CAPTURE CAPABILITY
+---------------------
+screen.capture (HIGH): explicit confirmation required
+In-memory result only; retention = 0 in ScreenService
+Never automatic, never scheduled, never uploaded, never disk-persisted by default
+Without bridge: UNAVAILABLE
+
+7. PERMISSIONS
+--------------
+Statuses: AVAILABLE | UNAVAILABLE | PERMISSION_REQUIRED
+Screen Recording may apply to windows/capture when bridge exists — never bypassed
+
+8. PRIVACY
+----------
+Audit never logs screenshot bytes, window contents, passwords, clipboard, typed text
+Audit: timestamp, taskId, toolId, action, targetId, risk, permission state, result
+
+9. RETENTION
+------------
+Default screenshot retention = 0
+No permanent screenshot directory / hidden cache / telemetry
+
+10. TESTS
+---------
+jarvis-screen-observation-smoke.ts → 17/17 PASS
+Opt-in: JARVIS_MACOS_SCREEN_TESTS=1
+
+11. REGRESSION
+--------------
+tsc --noEmit                              → PASS
+Phase 1 core smoke                        → 22/22 PASS
+Phase 2 observation smoke + audit         → PASS
+Phase 3 file smoke + audit                → PASS
+Phase 4 application smoke + audit         → PASS
+Phase 5 macos backend smoke + audit       → PASS
+Phase 6 screen smoke + audit              → PASS
+
+12. SECURITY AUDIT
+------------------
+jarvis-screen-observation-audit.ts PASSED (22 files scanned)
+
+13. FORBIDDEN APIs (confirmed absent)
+-------------------------------------
+child_process, exec/spawn/fork, shell, osascript/AppleScript,
+kill/killall/pkill, robotjs/nut.js/CGEvent, fetch/http clients,
+camera/mic capture APIs, screencapture shell command,
+setInterval capture loops, OCR/face-recognition libs
+
+14. LIMITATIONS
+---------------
+- Real display/window/capture require approved native ScreenCaptureKit bridge (not shipped)
+- No UI automation / continuous surveillance / upload
+- Phase 2 ScreenObserver remains demo scaffolding (separate from Phase 6 ScreenService)
+
+15. VERSION
+-----------
+0.6.0
+
+Phase 6 status: COMPLETE
+Phase 7: NOT STARTED — awaiting human validation.
+STOP.

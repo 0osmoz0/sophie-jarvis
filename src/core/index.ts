@@ -45,6 +45,32 @@ export { createFileMoveTool } from "../tools/fileMove.js";
 export { createFileCreateTool } from "../tools/fileCreate.js";
 export { createFileDeleteTool } from "../tools/fileDelete.js";
 export { registerApplicationTools } from "../tools/registerApplicationTools.js";
+export { registerScreenTools } from "../tools/registerScreenTools.js";
+export { createScreenInfoTool } from "../tools/screenInfo.js";
+export { createScreenWindowsTool } from "../tools/screenWindows.js";
+export { createScreenActiveWindowTool } from "../tools/screenActiveWindow.js";
+export { createScreenSessionTool } from "../tools/screenSession.js";
+export { createScreenCaptureTool } from "../tools/screenCapture.js";
+
+export {
+  ScreenService,
+  MockScreenBackend,
+  ScreenPolicy,
+  MemoryScreenAuditLog,
+  SCREEN_ERROR_CODES,
+} from "../screen/index.js";
+export type {
+  ScreenInfo,
+  WindowInfo,
+  SessionInfo,
+  ScreenCaptureResult,
+  ScreenBackend,
+} from "../screen/index.js";
+
+export {
+  MacOSScreenBackend,
+  MacOSWindowDiscovery,
+} from "../platform/macos/index.js";
 export { createApplicationListTool } from "../tools/applicationList.js";
 export { createApplicationInfoTool } from "../tools/applicationInfo.js";
 export { createApplicationActiveTool } from "../tools/applicationActive.js";
