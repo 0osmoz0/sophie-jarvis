@@ -33,6 +33,11 @@ Allowed type values:
 - security.alerts {}
 - security.assess {}
 - security.monitor.status {}
+- memory.remember {"content":"...","kind":"preference"?}
+- memory.recall {"query":"..."?}
+- memory.search {"query":"..."}
+- memory.forget {"query":"..."}
+- memory.list {}
 - conversation { replyHint? }
 - no_action { reason? }
 - needs_clarification { question }

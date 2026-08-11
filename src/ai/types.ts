@@ -34,6 +34,14 @@ export type JarvisSecurityIntentType =
   | "security.assess"
   | "security.monitor.status";
 
+/** Memory intents (Phase 16) — inform only, never execute system actions. */
+export type JarvisMemoryIntentType =
+  | "memory.remember"
+  | "memory.recall"
+  | "memory.search"
+  | "memory.forget"
+  | "memory.list";
+
 export type JarvisIntent =
   | {
       type: "file.copy";
@@ -65,6 +73,26 @@ export type JarvisIntent =
     }
   | {
       type: JarvisSecurityIntentType;
+      payload: Record<string, never>;
+    }
+  | {
+      type: "memory.remember";
+      payload: { content: string; kind?: string };
+    }
+  | {
+      type: "memory.recall";
+      payload: { query?: string };
+    }
+  | {
+      type: "memory.search";
+      payload: { query: string };
+    }
+  | {
+      type: "memory.forget";
+      payload: { query: string };
+    }
+  | {
+      type: "memory.list";
       payload: Record<string, never>;
     }
   | {
@@ -102,6 +130,14 @@ export const JARVIS_SECURITY_INTENT_TYPES: readonly JarvisSecurityIntentType[] =
   "security.alerts",
   "security.assess",
   "security.monitor.status",
+] as const;
+
+export const JARVIS_MEMORY_INTENT_TYPES: readonly JarvisMemoryIntentType[] = [
+  "memory.remember",
+  "memory.recall",
+  "memory.search",
+  "memory.forget",
+  "memory.list",
 ] as const;
 
 export const NON_ACTION_INTENT_TYPES = [
@@ -185,6 +221,10 @@ export type IntentRouterOutcome =
   | {
       kind: "security";
       intent: Extract<JarvisIntent, { type: JarvisSecurityIntentType }>;
+    }
+  | {
+      kind: "memory";
+      intent: Extract<JarvisIntent, { type: JarvisMemoryIntentType }>;
     }
   | {
       kind: "conversation";

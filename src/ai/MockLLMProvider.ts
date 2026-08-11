@@ -129,6 +129,49 @@ export class MockLLMProvider implements LLMProvider {
       );
     }
 
+    // Phase 16 — memory intents (before security/context)
+    if (
+      /^(retiens|souviens[- ]toi|enregistre|remember)(\s+que)?\s+/i.test(text.trim())
+    ) {
+      const content = text
+        .trim()
+        .replace(/^(retiens|souviens[- ]toi|enregistre|remember)(\s+que)?\s+/i, "")
+        .trim();
+      return this.wrapRaw(
+        JSON.stringify({
+          type: "memory.remember",
+          payload: { content },
+        }),
+      );
+    }
+    if (/^(oublie|forget|efface)\s+/i.test(text.trim())) {
+      const query = text.trim().replace(/^(oublie|forget|efface)(\s+que)?\s+/i, "").trim();
+      return this.wrapRaw(
+        JSON.stringify({ type: "memory.forget", payload: { query } }),
+      );
+    }
+    if (
+      /qu['']est[- ]ce que tu (sais|connais) (sur|de) moi|what do you (know|remember) about me|liste (mes )?souvenirs/i.test(
+        text,
+      )
+    ) {
+      return this.wrapRaw(
+        JSON.stringify({ type: "memory.list", payload: {} }),
+      );
+    }
+    if (
+      /de quoi (te )?souviens[- ]tu|what do you remember|quel (ide|éditeur)|quel est mon/i.test(
+        text,
+      )
+    ) {
+      return this.wrapRaw(
+        JSON.stringify({
+          type: "memory.recall",
+          payload: { query: text.trim() },
+        }),
+      );
+    }
+
     // Phase 14 — read-only security intents (before generic context)
     if (
       /pendant mon absence|quelque chose d['']inhabituel|activité (suspecte|inhabituelle)|security assess|évaluation (de )?sécurité|alerte(s)? de sécurité|est[- ]ce qu['']il s['']est passé/i.test(

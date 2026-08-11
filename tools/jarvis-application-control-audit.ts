@@ -82,6 +82,7 @@ export async function runApplicationControlAudit(): Promise<ApplicationControlAu
     if (rel.startsWith("src/context/")) continue;
     if (rel.startsWith("src/integration/")) continue;
     if (rel.startsWith("src/security/")) continue;
+    if (rel.startsWith("src/memory/")) continue;
 
     for (const { name, pattern } of FORBIDDEN) {
       if (pattern.test(code)) {

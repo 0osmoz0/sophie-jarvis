@@ -82,6 +82,19 @@ export interface ContextFilesInfo {
   reason?: string | null;
 }
 
+/** Relevant memories only — never the full store (Phase 16). */
+export interface ContextMemoryInfo {
+  status: DomainStatus;
+  count?: number;
+  relevant?: Array<{
+    id: string;
+    kind: string;
+    content: string;
+    confidence: number;
+  }>;
+  reason?: string | null;
+}
+
 /** Ephemeral Sophie signals (Phase 12) — never invents; may be absent. */
 export interface ContextSophieSignals {
   lastSophieInteraction: { type: string; timestamp: number } | null;
@@ -97,6 +110,8 @@ export interface ContextSnapshot {
   activity: ContextActivityInfo;
   presence: ContextPresenceInfo;
   files: ContextFilesInfo;
+  /** Present only when a memory source is wired; relevant subset only. */
+  memory?: ContextMemoryInfo;
   /** Present only when a SophieIntegration signal source is wired. */
   sophie?: ContextSophieSignals;
 }

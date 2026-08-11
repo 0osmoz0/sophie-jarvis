@@ -7,6 +7,7 @@ import type {
   JarvisActionIntentType,
   JarvisContextIntentType,
   JarvisSecurityIntentType,
+  JarvisMemoryIntentType,
   JarvisIntent,
 } from "./types.js";
 import {
@@ -14,6 +15,7 @@ import {
   AI_LIMITS,
   JARVIS_CONTEXT_INTENT_TYPES,
   JARVIS_SECURITY_INTENT_TYPES,
+  JARVIS_MEMORY_INTENT_TYPES,
 } from "./types.js";
 
 export interface IntentRouterOptions {
@@ -100,7 +102,8 @@ export class IntentRouter {
               : outcome.kind === "conversation" ||
                   outcome.kind === "no_action" ||
                   outcome.kind === "context" ||
-                  outcome.kind === "security"
+                  outcome.kind === "security" ||
+                  outcome.kind === "memory"
                 ? AI_ERROR_CODES.NO_ACTION
                 : outcome.kind === "provider_error"
                   ? outcome.status
@@ -112,6 +115,8 @@ export class IntentRouter {
                 ? "Context intent is read-only (not an action plan)"
               : outcome.kind === "security"
                 ? "Security intent is read-only (not an action plan)"
+              : outcome.kind === "memory"
+                ? "Memory intent never becomes an executable action plan"
                 : outcome.kind === "rejected"
                   ? outcome.message
                   : outcome.kind === "provider_error"
@@ -179,6 +184,17 @@ function classifyIntent(intent: JarvisIntent): IntentRouterOutcome {
           intent: intent as Extract<
             JarvisIntent,
             { type: JarvisSecurityIntentType }
+          >,
+        };
+      }
+      if (
+        (JARVIS_MEMORY_INTENT_TYPES as readonly string[]).includes(intent.type)
+      ) {
+        return {
+          kind: "memory",
+          intent: intent as Extract<
+            JarvisIntent,
+            { type: JarvisMemoryIntentType }
           >,
         };
       }

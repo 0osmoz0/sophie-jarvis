@@ -23,6 +23,8 @@ export class SecurityBaseline {
     at: number;
   }> = [];
   private lastPresence: string | null = null;
+  /** Keys informed by MemoryService preferences — never a security bypass. */
+  private readonly informedHabitual = new Set<string>();
 
   getCurrent(): SecurityBaselineSnapshot | null {
     return this.current ? cloneBaseline(this.current) : null;
@@ -77,7 +79,31 @@ export class SecurityBaseline {
     }
   }
 
+  /**
+   * Mark keys informed by long-term memory (preferences).
+   * Informs habitual detection only — NEVER bypasses security policy.
+   */
+  markInformedHabitual(keys: string[]): void {
+    for (const k of keys) {
+      const key = k.trim().toLowerCase();
+      if (!key) continue;
+      this.informedHabitual.add(key);
+      // Also bump frequency lightly so isHabitualApp can trip
+      const n = this.appFrequency.get(key) ?? 0;
+      if (n < HABITUAL_THRESHOLD) {
+        this.appFrequency.set(key, HABITUAL_THRESHOLD);
+      }
+    }
+  }
+
   isHabitualApp(key: string): boolean {
+    const lower = key.toLowerCase();
+    if (this.informedHabitual.has(lower)) return true;
+    for (const h of this.informedHabitual) {
+      if (lower.includes(h) || h.includes(lower.replace(/^bundle:|^name:/, ""))) {
+        return true;
+      }
+    }
     return (this.appFrequency.get(key) ?? 0) >= HABITUAL_THRESHOLD;
   }
 
@@ -109,6 +135,7 @@ export class SecurityBaseline {
     this.appFrequency.clear();
     this.presenceTransitions.length = 0;
     this.lastPresence = null;
+    this.informedHabitual.clear();
   }
 }
 

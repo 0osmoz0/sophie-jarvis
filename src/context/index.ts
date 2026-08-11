@@ -12,6 +12,7 @@ export type {
   ContextActivityInfo,
   ContextPresenceInfo,
   ContextFilesInfo,
+  ContextMemoryInfo,
   ContextSophieSignals,
 } from "./types.js";
 

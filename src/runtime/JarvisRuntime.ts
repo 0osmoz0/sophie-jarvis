@@ -8,12 +8,16 @@ import type { SophieIntegration } from "../integration/SophieIntegration.js";
 import type { SophieEmitResult } from "../integration/types.js";
 import type { SecurityService } from "../security/SecurityService.js";
 import type { SecurityMonitor } from "../security/SecurityMonitor.js";
-import type { JarvisSecurityIntentType } from "../ai/types.js";
+import type { MemoryService } from "../memory/MemoryService.js";
+import type { JarvisSecurityIntentType, JarvisMemoryIntentType } from "../ai/types.js";
 import {
   contextSnapshotToSecurityObservation,
 } from "../security/fromContext.js";
 import { formatAlertMessage } from "../security/SecurityAlert.js";
 import { formatMonitorStatus } from "../security/SecurityMonitor.js";
+import {
+  candidateFromExplicitRemember,
+} from "../memory/MemoryExtractor.js";
 import {
   ConversationContext,
   isAffirmative,
@@ -40,6 +44,8 @@ export interface JarvisRuntimeOptions {
   securityService?: SecurityService;
   /** Optional Phase 15 security monitor (alert only). */
   securityMonitor?: SecurityMonitor;
+  /** Optional Phase 16 long-term memory (inform only). */
+  memoryService?: MemoryService;
   formatter?: ResponseFormatter;
   context?: ConversationContext;
   audit?: RuntimeAuditSink;
@@ -65,7 +71,9 @@ export class JarvisRuntime {
   private readonly sophieIntegration: SophieIntegration | undefined;
   private readonly securityService: SecurityService | undefined;
   private readonly securityMonitor: SecurityMonitor | undefined;
+  private readonly memoryService: MemoryService | undefined;
   private readonly contextFormatter = new ContextFormatter();
+  private pendingForgetQuery: string | null = null;
   private readonly formatter: ResponseFormatter;
   private readonly context: ConversationContext;
   private readonly audit: RuntimeAuditSink;
@@ -79,6 +87,7 @@ export class JarvisRuntime {
     this.sophieIntegration = options.sophieIntegration;
     this.securityService = options.securityService;
     this.securityMonitor = options.securityMonitor;
+    this.memoryService = options.memoryService;
     this.formatter = options.formatter ?? new ResponseFormatter();
     this.context = options.context ?? new ConversationContext();
     this.audit = options.audit ?? new MemoryRuntimeAuditLog();
@@ -141,6 +150,52 @@ export class JarvisRuntime {
     }
 
     const text = input.trim();
+
+    // Phase 16 — pending memory forget confirmation (not an ActionExecutor path)
+    if (this.pendingForgetQuery) {
+      if (isAffirmative(text)) {
+        const query = this.pendingForgetQuery;
+        this.pendingForgetQuery = null;
+        if (!this.memoryService) {
+          return this.finish(
+            interactionId,
+            this.formatter.unavailable("Mémoire non configurée."),
+            "ERROR",
+            timing,
+            totalStart,
+            "memory.forget",
+            "UNAVAILABLE",
+          );
+        }
+        const result = await this.memoryService.forget(query);
+        const message = result.ok
+          ? `D'accord, j'ai oublié ce souvenir. (Aucune action système.)`
+          : `Je n'ai pas trouvé ce souvenir (${result.reason ?? "not_found"}).`;
+        return this.finish(
+          interactionId,
+          this.formatter.securityMessage(message),
+          "IDLE",
+          timing,
+          totalStart,
+          "memory.forget",
+          result.ok ? "OK" : "NOT_FOUND",
+        );
+      }
+      if (isNegative(text)) {
+        this.pendingForgetQuery = null;
+        return this.finish(
+          interactionId,
+          this.formatter.securityMessage("Oubli annulé."),
+          "IDLE",
+          timing,
+          totalStart,
+          "memory.forget",
+          "CANCELLED",
+        );
+      }
+      // New command cancels pending forget
+      this.pendingForgetQuery = null;
+    }
 
     // --- Pending confirmation branch (oui/non) ---
     const pending = this.context.getPending();
@@ -384,6 +439,161 @@ export class JarvisRuntime {
     }
   }
 
+  /**
+   * Phase 16 — memory intents. Inform only; never execute system actions.
+   */
+  private async handleMemoryIntent(
+    intent: Extract<
+      import("../ai/types.js").JarvisIntent,
+      { type: JarvisMemoryIntentType }
+    >,
+    interactionId: string,
+    timing: InteractionTiming,
+    totalStart: number,
+  ): Promise<ProcessInputResult> {
+    if (!this.memoryService) {
+      return this.finish(
+        interactionId,
+        this.formatter.unavailable("Le service mémoire n'est pas configuré."),
+        "ERROR",
+        timing,
+        totalStart,
+        intent.type,
+        "UNAVAILABLE",
+      );
+    }
+    try {
+      // Keep security baseline informed (never a bypass)
+      if (this.securityService) {
+        this.securityService.baseline.markInformedHabitual(
+          this.memoryService.applicationHints(),
+        );
+      }
+
+      if (intent.type === "memory.list") {
+        const records = await this.memoryService.list();
+        if (records.length === 0) {
+          return this.finish(
+            interactionId,
+            this.formatter.securityMessage(
+              "Je n'ai aucun souvenir stocké pour cette session.",
+            ),
+            "IDLE",
+            timing,
+            totalStart,
+            intent.type,
+            "OK",
+          );
+        }
+        const lines = [
+          `Souvenirs (${records.length}, budget d'affichage 12) :`,
+          ...records.slice(0, 12).map(
+            (r) => `• [${r.kind}] ${r.content} (confiance ${r.confidence.toFixed(2)})`,
+          ),
+          "",
+          "La mémoire informe seulement — elle n'exécute rien.",
+        ];
+        return this.finish(
+          interactionId,
+          this.formatter.securityMessage(lines.join("\n")),
+          "IDLE",
+          timing,
+          totalStart,
+          intent.type,
+          "OK",
+        );
+      }
+
+      if (intent.type === "memory.recall" || intent.type === "memory.search") {
+        const query =
+          intent.type === "memory.search"
+            ? intent.payload.query
+            : intent.payload.query ?? "préférences projets objectifs";
+        const { records } =
+          intent.type === "memory.search"
+            ? {
+                records: await this.memoryService.search(query),
+              }
+            : await this.memoryService.recall(query);
+        if (records.length === 0) {
+          return this.finish(
+            interactionId,
+            this.formatter.securityMessage(
+              "Aucun souvenir pertinent trouvé.",
+            ),
+            "IDLE",
+            timing,
+            totalStart,
+            intent.type,
+            "OK",
+          );
+        }
+        const lines = [
+          "Voici ce dont je me souviens (pertinent uniquement) :",
+          ...records.map((r) => `• ${r.content}`),
+          "",
+          "Je ne peux pas confirmer au-delà de ces souvenirs stockés.",
+        ];
+        return this.finish(
+          interactionId,
+          this.formatter.securityMessage(lines.join("\n")),
+          "IDLE",
+          timing,
+          totalStart,
+          intent.type,
+          "OK",
+        );
+      }
+
+      if (intent.type === "memory.remember") {
+        const candidate = candidateFromExplicitRemember(intent.payload.content);
+        if (intent.payload.kind) {
+          candidate.kind = intent.payload.kind as typeof candidate.kind;
+        }
+        const result = await this.memoryService.remember(candidate);
+        const message = result.ok
+          ? `C'est noté. (${result.decision})\n« ${result.record?.content ?? intent.payload.content} »\nAucune action système.`
+          : `Je ne peux pas mémoriser ça (${result.reason ?? "rejeté"}).`;
+        return this.finish(
+          interactionId,
+          this.formatter.securityMessage(message),
+          "IDLE",
+          timing,
+          totalStart,
+          intent.type,
+          result.ok ? "OK" : "REJECTED",
+        );
+      }
+
+      // memory.forget — require confirmation
+      this.pendingForgetQuery = intent.payload.query;
+      return this.finish(
+        interactionId,
+        this.formatter.securityMessage(
+          `Tu veux que j'oublie « ${intent.payload.query} » ? (oui/non)\nAucune suppression système — souvenir uniquement.`,
+        ),
+        "WAITING_CONFIRMATION",
+        timing,
+        totalStart,
+        intent.type,
+        "CONFIRMATION_REQUIRED",
+      );
+    } catch (err) {
+      return this.finish(
+        interactionId,
+        this.formatter.error(
+          RUNTIME_ERROR_CODES.ERROR,
+          err instanceof Error ? err.message : String(err),
+        ),
+        "ERROR",
+        timing,
+        totalStart,
+        intent.type,
+        "ERROR",
+      );
+    }
+  }
+
   private async handleConfirmYes(
     interactionId: string,
     timing: InteractionTiming,
@@ -588,6 +798,15 @@ export class JarvisRuntime {
     if (outcome.kind === "security") {
       return this.handleSecurityIntent(
         outcome.intent.type,
+        interactionId,
+        timing,
+        totalStart,
+      );
+    }
+
+    if (outcome.kind === "memory") {
+      return this.handleMemoryIntent(
+        outcome.intent,
         interactionId,
         timing,
         totalStart,

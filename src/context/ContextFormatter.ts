@@ -29,10 +29,31 @@ export class ContextFormatter {
     lines.push(this.formatScreen(snapshot));
     lines.push("");
     lines.push(this.formatUser(snapshot));
+    if (snapshot.memory) {
+      lines.push("");
+      lines.push(this.formatMemory(snapshot));
+    }
     lines.push("");
     lines.push(
       "Certaines informations peuvent être indisponibles selon les permissions macOS.",
     );
+    return lines.join("\n");
+  }
+
+  private formatMemory(snapshot: ContextSnapshot): string {
+    const m = snapshot.memory;
+    if (!m || m.status !== "available") {
+      return `Mémoire : ${m ? statusLabel(m.status) : "indisponible"}${m?.reason ? ` (${m.reason})` : ""}`;
+    }
+    const lines = [`Mémoire pertinente (${m.count ?? m.relevant?.length ?? 0}) :`];
+    const items = m.relevant ?? [];
+    if (items.length === 0) {
+      lines.push("• (aucun souvenir pertinent)");
+    } else {
+      for (const r of items.slice(0, 5)) {
+        lines.push(`• [${r.kind}] ${r.content}`);
+      }
+    }
     return lines.join("\n");
   }
 

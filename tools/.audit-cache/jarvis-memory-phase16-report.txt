@@ -1,0 +1,170 @@
+JARVIS LONG-TERM MEMORY — PHASE 16 REPORT
+==========================================
+
+VERSION:
+0.16.0
+Generated: 2026-08-11
+Repository: sophie-jarvis
+
+=== MEMORY PRE-AUDIT ===
+Existing memory: ephemeral only (ConversationContext 1-turn, SophieSignalMemory last-signal, SecurityBaseline session)
+Existing persistence: none for agent memory (no SQLite)
+Existing preferences: none
+Existing conversation history: none multi-turn
+Existing user profile: none
+Existing Sophie memory: last signal/category only
+Existing runtime context: ContextSnapshot read-only + ConversationContext pending
+What already exists: session RAM stores + audits
+What is missing: long-term MemoryService / persistence / recall budget
+What should NOT be duplicated: SophieSignalMemory, SecurityBaseline, ConversationContext, Memory*AuditLog
+
+MEMORY ARCHITECTURE
+-------------------
+USER → LLM/Explicit → MemoryCandidate → Validator → Policy → MemoryService
+  → MemoryStore (+ optional JsonMemoryPersistence)
+  → Context/Runtime relevant recall only
+
+MEMORY INFORMS · MEMORY NEVER DECIDES · MEMORY NEVER EXECUTES
+
+MEMORY MODEL
+------------
+MemoryRecord { id, kind, content, normalizedContent?, importance, confidence,
+  sensitivity, source, createdAt, updatedAt, lastAccessedAt?, expiresAt?,
+  accessCount, tags, supersedesId? }
+Kinds: fact|preference|goal|project|decision|constraint|relationship|temporary
+
+STORAGE
+-------
+InMemoryMemoryStore — MAX_MEMORIES default 500 (configurable)
+Evicts lowest importance when full
+
+PERSISTENCE
+-----------
+JsonMemoryPersistence → .jarvis/memory.json (gitignored)
+Disable: JARVIS_MEMORY_PERSIST=0
+Custom path: JARVIS_MEMORY_PATH
+No SQLite, no network
+
+VALIDATION
+----------
+MemoryValidator: schema, bounds, secret patterns, command patterns, injection
+Reasonable (not naive keyword ban)
+
+POLICY
+------
+STORE / REJECT / TEMPORARY
+Secrets & commands → REJECT
+Transient / low confidence / hedging → TEMPORARY + expiry
+
+DEDUPLICATION
+-------------
+Normalized similarity + preference topic + shared entities → merge
+
+CONFLICTS
+---------
+Newer explicit preference/decision on same topic → CONFLICT_RESOLVED (supersede)
+
+RETENTION
+---------
+temporary / low confidence: expiresAt
+expireDue on list/recall/remember
+Audited EXPIRE operations
+
+RETRIEVAL
+---------
+recall(query, budget { maxMemories:5, maxCharacters:800 })
+ContextSnapshot.memory = relevant subset only (system.context)
+
+LLM EXTRACTION
+--------------
+parseMemoryCandidatesFromLlm → candidates only
+LLM never writes MemoryStore / ActionExecutor / FileService
+
+PRIVACY
+-------
+Reject passwords, API keys, tokens, private keys, credit-card phrases
+Never store screenshots/clipboard/keystrokes/camera/mic
+Audit never contains memory.content
+
+SECURITY
+--------
+Memory may inform SecurityBaseline.markInformedHabitual(applicationHints)
+MEMORY MAY INFORM · MEMORY MAY NOT BYPASS
+No permission/confirmation/denylist bypass
+
+PERFORMANCE
+-----------
+REAL measurements (SIMULATION + benches):
+rememberAvgMs ~0.05 (5000 candidates)
+recallAvgMs ~0.02
+searchAvgMs ~0.01
+size=10/100/500 rememberTotalMs: 0 / 1 / 6 ; recallMs: 0
+
+SIMULATION
+----------
+MODE: SIMULATION
+total: 5000
+accepted: 3572
+rejected: 1428
+deduplicated: 2850
+conflicts: 714
+(Not real user data.)
+
+TESTS
+-----
+jarvis-memory-smoke: 18/18 PASSED
+jarvis-memory-audit: PASSED
+jarvis-memory-simulation: PASSED
+
+REGRESSION
+----------
+tsc + Phases 1→15 + memory suite: ALL PASSED
+
+LIMITATIONS
+-----------
+- Not full multi-turn conversational memory
+- Heuristic extraction imperfect
+- Local JSON only (no sync/cloud)
+- Confidence is approximate
+- Memory never executes or bypasses security
+
+FILES CREATED
+-------------
+src/memory/types.ts
+src/memory/MemoryPolicy.ts
+src/memory/MemoryValidator.ts
+src/memory/MemoryAuditLog.ts
+src/memory/MemoryStore.ts
+src/memory/InMemoryMemoryStore.ts
+src/memory/MemoryPersistence.ts
+src/memory/JsonMemoryPersistence.ts
+src/memory/MemoryService.ts
+src/memory/MemoryExtractor.ts
+src/memory/index.ts
+src/tools/memoryTools.ts
+tools/jarvis-memory-smoke.ts
+tools/jarvis-memory-audit.ts
+tools/jarvis-memory-simulation.ts
+docs/JARVIS_MEMORY.md
+tools/.audit-cache/jarvis-memory-phase16-report.txt
+
+FILES MODIFIED
+--------------
+src/ai/types.ts, IntentRouter.ts, IntentValidator.ts, MockLLMProvider.ts, OllamaLLMProvider.ts, index.ts
+src/runtime/JarvisRuntime.ts, cli.ts
+src/context/types.ts, ContextService.ts, ContextFormatter.ts, index.ts
+src/security/SecurityBaseline.ts (markInformedHabitual only)
+src/core/index.ts
+src/tools/systemInfo.ts (0.16.0)
+package.json, README.md, .gitignore
+tools/security-invariants.ts (+ allowlists)
+tools/jarvis-*-audit.ts (skip src/memory)
+tools/jarvis-core-smoke.ts (version)
+
+PHASE 16 STATUS:
+COMPLETE
+
+PHASE 17:
+NOT STARTED
+
+STOP.

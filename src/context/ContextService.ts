@@ -5,6 +5,7 @@ import type { UserActivityService } from "../presence/UserActivityService.js";
 import type {
   ContextApplicationsInfo,
   ContextAuditSink,
+  ContextMemoryInfo,
   ContextQueryKind,
   ContextScreenInfo,
   ContextServiceResult,
@@ -23,6 +24,8 @@ export interface ContextServiceOptions {
   audit?: ContextAuditSink;
   /** Optional Phase 12 ephemeral Sophie signals (read-only merge). */
   sophieSignals?: () => ContextSophieSignals | undefined;
+  /** Optional Phase 16 relevant memories only (never full dump). */
+  memoryRelevant?: () => ContextMemoryInfo | Promise<ContextMemoryInfo>;
 }
 
 /**
@@ -36,6 +39,9 @@ export class ContextService {
   private readonly activity: UserActivityService | undefined;
   private readonly audit: ContextAuditSink;
   private readonly sophieSignals: (() => ContextSophieSignals | undefined) | undefined;
+  private readonly memoryRelevant:
+    | (() => ContextMemoryInfo | Promise<ContextMemoryInfo>)
+    | undefined;
 
   constructor(options: ContextServiceOptions = {}) {
     this.observation = options.observation;
@@ -44,6 +50,7 @@ export class ContextService {
     this.activity = options.activity;
     this.audit = options.audit ?? new MemoryContextAuditLog();
     this.sophieSignals = options.sophieSignals;
+    this.memoryRelevant = options.memoryRelevant;
   }
 
   async getSnapshot(
@@ -210,6 +217,17 @@ export class ContextService {
           lastUserSignal: signals.lastUserSignal
             ? { ...signals.lastUserSignal }
             : null,
+        };
+      }
+    }
+
+    if (this.memoryRelevant && query === "system.context") {
+      try {
+        snapshot.memory = await this.memoryRelevant();
+      } catch {
+        snapshot.memory = {
+          status: "error",
+          reason: "Memory source failed",
         };
       }
     }

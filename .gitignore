@@ -21,3 +21,6 @@ build/
 
 # Phase 3 test sandbox (recreated by smoke tests)
 tools/.tmp/
+
+# Phase 16 local memory persistence (never commit user memories)
+.jarvis/

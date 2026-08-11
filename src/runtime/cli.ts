@@ -3,6 +3,7 @@
  * No shell spawning, no direct system mutation.
  */
 import * as readline from "node:readline";
+import path from "node:path";
 import { PermissionManager } from "../permissions/PermissionManager.js";
 import { FileService } from "../files/FileService.js";
 import { MemoryFileAuditLog } from "../files/FileAuditLog.js";
@@ -22,6 +23,8 @@ import {
   contextSnapshotToSecurityObservation,
   contextSnapshotToSecuritySources,
 } from "../security/fromContext.js";
+import { MemoryService } from "../memory/MemoryService.js";
+import { JsonMemoryPersistence } from "../memory/JsonMemoryPersistence.js";
 import { ActionService } from "../actions/ActionService.js";
 import { ActionConfirmation } from "../actions/ActionConfirmation.js";
 import { IntentRouter } from "../ai/IntentRouter.js";
@@ -90,12 +93,42 @@ function createProductionRuntime(): {
   const securityService = new SecurityService({
     onAlert: notifySophieAlert,
   });
+
+  const memoryPath =
+    process.env.JARVIS_MEMORY_PATH ??
+    path.join(process.cwd(), ".jarvis", "memory.json");
+  const persist =
+    process.env.JARVIS_MEMORY_PERSIST === "0"
+      ? undefined
+      : new JsonMemoryPersistence({ filePath: memoryPath });
+  const memoryService = new MemoryService({
+    persistence: persist,
+    autoload: true,
+  });
+
   const contextService = new ContextService({
     observation: new ObservationService(),
     applications: apps,
     screen: new ScreenService(),
     activity: new UserActivityService(),
     sophieSignals: () => sophieIntegration.getContextSignals(),
+    memoryRelevant: async () => {
+      await memoryService.whenReady();
+      const { records } = await memoryService.recall("préférences projets objectifs", {
+        maxMemories: 3,
+        maxCharacters: 400,
+      });
+      return {
+        status: "available" as const,
+        count: records.length,
+        relevant: records.map((r) => ({
+          id: r.id,
+          kind: r.kind,
+          content: r.content,
+          confidence: r.confidence,
+        })),
+      };
+    },
   });
 
   const monitorEnabled = process.env.JARVIS_SECURITY_MONITOR === "1";
@@ -117,6 +150,13 @@ function createProductionRuntime(): {
     onAlert: notifySophieAlert,
   });
 
+  // Memory may inform security habits — never bypass
+  void memoryService.whenReady().then(() => {
+    securityService.baseline.markInformedHabitual(
+      memoryService.applicationHints(),
+    );
+  });
+
   runtime = new JarvisRuntime({
     router,
     actions,
@@ -124,6 +164,7 @@ function createProductionRuntime(): {
     sophieIntegration,
     securityService,
     securityMonitor,
+    memoryService,
     formatter: new ResponseFormatter(),
   });
   return { runtime, securityMonitor };

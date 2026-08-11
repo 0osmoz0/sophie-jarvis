@@ -1,6 +1,5 @@
 /**
- * Phase 8 controlled action execution security audit.
- * Scans all TypeScript files under src/ (comments and strings stripped).
+ * Phase 16 memory audit — memory layer must stay non-executive.
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -15,20 +14,15 @@ const FORBIDDEN = [
   { name: "fork(", pattern: /\bfork\s*\(/ },
   { name: "shell:true", pattern: /shell\s*:\s*true/ },
   { name: "osascript", pattern: /\bosascript\b/i },
-  { name: "AppleScript", pattern: /\bAppleScript\b/ },
-  { name: "eval(", pattern: /\beval\s*\(/ },
-  { name: "Function(", pattern: /\bFunction\s*\(/ },
-  { name: "new Function", pattern: /\bnew\s+Function\b/ },
+  { name: "CGEventPost", pattern: /\bCGEventPost\b/ },
   { name: "robotjs", pattern: /\brobotjs\b/i },
   { name: "nut.js", pattern: /\b(@nut-tree|nut\.js)\b/i },
-  { name: "CGEvent", pattern: /\bCGEvent\b/ },
   { name: "fetch(", pattern: /\bfetch\s*\(/ },
-  { name: "http client", pattern: /\bfrom\s+["']node:https?["']/ },
-  { name: "execute(command)", pattern: /\bexecute\s*\(\s*command\b/i },
-  { name: "runCommand", pattern: /\brunCommand\b/ },
-  { name: "shellCommand", pattern: /\bshellCommand\b/ },
-  { name: "commandExecutor", pattern: /\bcommandExecutor\b/i },
-  { name: "system(command)", pattern: /\bsystem\s*\(\s*command\b/i },
+  { name: "getUserMedia", pattern: /\bgetUserMedia\b/ },
+  { name: "ActionExecutor", pattern: /\bActionExecutor\b/ },
+  { name: "ApplicationService", pattern: /\bApplicationService\b/ },
+  { name: "AnimationPlayer", pattern: /\bAnimationPlayer\b/ },
+  { name: "BehaviorBrain", pattern: /\bBehaviorBrain\b/ },
 ] as const;
 
 function stripCommentsAndStrings(source: string): string {
@@ -60,29 +54,30 @@ async function walkTs(dir: string): Promise<string[]> {
   return out;
 }
 
-export interface ActionExecutionAuditReport {
+export interface MemoryPhaseAuditReport {
   ok: boolean;
   scannedFiles: number;
   failures: string[];
   notes: string[];
 }
 
-export async function runActionExecutionAudit(): Promise<ActionExecutionAuditReport> {
-  const files = await walkTs(path.join(ROOT, "src"));
+export async function runMemoryPhaseAudit(): Promise<MemoryPhaseAuditReport> {
+  const files = [
+    ...(await walkTs(path.join(ROOT, "src/memory"))),
+    path.join(ROOT, "src/tools/memoryTools.ts"),
+  ];
   const failures: string[] = [];
   const notes: string[] = [];
 
   for (const file of files) {
-    const raw = await fs.readFile(file, "utf8");
+    let raw: string;
+    try {
+      raw = await fs.readFile(file, "utf8");
+    } catch {
+      continue;
+    }
     const code = stripCommentsAndStrings(raw);
     const rel = path.relative(ROOT, file).replace(/\\/g, "/");
-    // Phase 9–10 layers audited separately.
-    if (rel.startsWith("src/ai/")) continue;
-    if (rel.startsWith("src/runtime/")) continue;
-    if (rel.startsWith("src/context/")) continue;
-    if (rel.startsWith("src/integration/")) continue;
-    if (rel.startsWith("src/security/")) continue;
-    if (rel.startsWith("src/memory/")) continue;
     for (const { name, pattern } of FORBIDDEN) {
       if (pattern.test(code)) {
         failures.push(`${rel}: forbidden pattern "${name}"`);
@@ -90,16 +85,9 @@ export async function runActionExecutionAudit(): Promise<ActionExecutionAuditRep
     }
   }
 
-  const pkg = JSON.parse(
-    await fs.readFile(path.join(ROOT, "package.json"), "utf8"),
-  ) as { dependencies?: Record<string, string> };
-  if (pkg.dependencies && Object.keys(pkg.dependencies).length > 0) {
-    failures.push("package.json: runtime dependencies must remain empty");
-  }
-
-  notes.push("Phase 8: typed ActionPlan only — no arbitrary shell commands.");
-  notes.push("ActionExecutor delegates solely to FileService / ApplicationService.");
-  notes.push("PermissionManager cannot be bypassed for action execution.");
+  notes.push("Phase 16: Memory informs only — never executes.");
+  notes.push("No ActionExecutor / ApplicationService / BehaviorBrain imports.");
+  notes.push("Local JSON persistence only — no network upload.");
 
   return {
     ok: failures.length === 0,
@@ -114,13 +102,12 @@ const isDirect =
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isDirect) {
-  runActionExecutionAudit().then((report) => {
-    console.log(`Action execution audit — scanned ${report.scannedFiles} files`);
+  runMemoryPhaseAudit().then((report) => {
+    console.log(`Memory phase audit — scanned ${report.scannedFiles} files`);
     for (const n of report.notes) console.log(`  note: ${n}`);
-    if (report.ok) {
-      console.log("Action execution audit PASSED.");
-    } else {
-      console.error("Action execution audit FAILED:");
+    if (report.ok) console.log("Memory phase audit PASSED.");
+    else {
+      console.error("Memory phase audit FAILED:");
       for (const f of report.failures) console.error(`  - ${f}`);
       process.exitCode = 1;
     }

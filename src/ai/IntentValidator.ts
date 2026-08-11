@@ -10,6 +10,7 @@ import {
   JARVIS_ACTION_INTENT_TYPES,
   JARVIS_CONTEXT_INTENT_TYPES,
   JARVIS_SECURITY_INTENT_TYPES,
+  JARVIS_MEMORY_INTENT_TYPES,
   NON_ACTION_INTENT_TYPES,
 } from "./types.js";
 
@@ -174,6 +175,13 @@ export class IntentValidator {
       };
     }
 
+    if ((JARVIS_MEMORY_INTENT_TYPES as readonly string[]).includes(type)) {
+      return this.validateMemory(
+        type as (typeof JARVIS_MEMORY_INTENT_TYPES)[number],
+        payload,
+      );
+    }
+
     if (!(JARVIS_ACTION_INTENT_TYPES as readonly string[]).includes(type)) {
       return fail(
         AI_ERROR_CODES.UNKNOWN_ACTION,
@@ -182,6 +190,125 @@ export class IntentValidator {
     }
 
     return this.validateAction(type as JarvisActionIntentType, payload);
+  }
+
+  private validateMemory(
+    type: (typeof JARVIS_MEMORY_INTENT_TYPES)[number],
+    payload: Record<string, unknown>,
+  ): IntentValidationResult {
+    switch (type) {
+      case "memory.list": {
+        const extra = Object.keys(payload);
+        if (extra.length) {
+          return fail(
+            AI_ERROR_CODES.INVALID_INTENT,
+            `memory.list requires empty payload; got: ${extra.join(",")}`,
+          );
+        }
+        return { ok: true, intent: { type: "memory.list", payload: {} } };
+      }
+      case "memory.recall": {
+        const extra = Object.keys(payload).filter((k) => k !== "query");
+        if (extra.length) {
+          return fail(
+            AI_ERROR_CODES.INVALID_INTENT,
+            `Unknown payload fields: ${extra.join(",")}`,
+          );
+        }
+        if (payload.query != null && typeof payload.query !== "string") {
+          return fail(AI_ERROR_CODES.INVALID_INTENT, "query must be string");
+        }
+        return {
+          ok: true,
+          intent: {
+            type: "memory.recall",
+            payload: {
+              query:
+                typeof payload.query === "string" ? payload.query : undefined,
+            },
+          },
+        };
+      }
+      case "memory.search": {
+        if (typeof payload.query !== "string" || !payload.query.trim()) {
+          return fail(AI_ERROR_CODES.INVALID_INTENT, "query required");
+        }
+        const extra = Object.keys(payload).filter((k) => k !== "query");
+        if (extra.length) {
+          return fail(
+            AI_ERROR_CODES.INVALID_INTENT,
+            `Unknown payload fields: ${extra.join(",")}`,
+          );
+        }
+        return {
+          ok: true,
+          intent: {
+            type: "memory.search",
+            payload: { query: payload.query.trim() },
+          },
+        };
+      }
+      case "memory.remember": {
+        if (typeof payload.content !== "string" || !payload.content.trim()) {
+          return fail(AI_ERROR_CODES.INVALID_INTENT, "content required");
+        }
+        const extra = Object.keys(payload).filter(
+          (k) => k !== "content" && k !== "kind",
+        );
+        if (extra.length) {
+          return fail(
+            AI_ERROR_CODES.INVALID_INTENT,
+            `Unknown payload fields: ${extra.join(",")}`,
+          );
+        }
+        if (payload.kind != null && typeof payload.kind !== "string") {
+          return fail(AI_ERROR_CODES.INVALID_INTENT, "kind must be string");
+        }
+        // Deep secret check on content
+        const lower = payload.content.toLowerCase();
+        if (
+          /\b(password|passwd|api[_ -]?key|private[_ -]?key)\b/.test(lower) &&
+          /[:=]/.test(payload.content)
+        ) {
+          return fail(
+            AI_ERROR_CODES.FORBIDDEN_CONTENT,
+            "Memory content looks like a secret",
+          );
+        }
+        return {
+          ok: true,
+          intent: {
+            type: "memory.remember",
+            payload: {
+              content: payload.content.trim(),
+              kind:
+                typeof payload.kind === "string" ? payload.kind : undefined,
+            },
+          },
+        };
+      }
+      case "memory.forget": {
+        if (typeof payload.query !== "string" || !payload.query.trim()) {
+          return fail(AI_ERROR_CODES.INVALID_INTENT, "query required");
+        }
+        const extra = Object.keys(payload).filter((k) => k !== "query");
+        if (extra.length) {
+          return fail(
+            AI_ERROR_CODES.INVALID_INTENT,
+            `Unknown payload fields: ${extra.join(",")}`,
+          );
+        }
+        return {
+          ok: true,
+          intent: {
+            type: "memory.forget",
+            payload: { query: payload.query.trim() },
+          },
+        };
+      }
+      default:
+        return fail(AI_ERROR_CODES.UNKNOWN_ACTION, `Unknown memory type`);
+    }
   }
 
   private validateNonAction(

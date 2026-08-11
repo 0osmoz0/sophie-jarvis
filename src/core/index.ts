@@ -299,3 +299,29 @@ export {
   createSecurityAssessTool,
   createSecurityMonitorStatusTool,
 } from "../tools/securityAssess.js";
+
+export {
+  MemoryService,
+  MemoryPolicy,
+  MemoryValidator,
+  InMemoryMemoryStore,
+  JsonMemoryPersistence,
+  NullMemoryPersistence,
+  MemoryAuditLog,
+  parseMemoryCandidatesFromLlm,
+  extractExplicitMemoryCommand,
+  candidateFromExplicitRemember,
+} from "../memory/index.js";
+export type {
+  MemoryRecord,
+  MemoryCandidate,
+  MemoryKind,
+} from "../memory/index.js";
+
+export {
+  createMemoryRecallTool,
+  createMemorySearchTool,
+  createMemoryListTool,
+  createMemoryRememberTool,
+  createMemoryForgetTool,
+} from "../tools/memoryTools.js";
