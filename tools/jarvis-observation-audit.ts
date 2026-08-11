@@ -91,6 +91,7 @@ export async function runObservationAudit(): Promise<AuditReport> {
     if (rel.replace(/\\/g, "/").startsWith("src/runtime/")) continue;
     if (rel.replace(/\\/g, "/").startsWith("src/context/")) continue;
     if (rel.replace(/\\/g, "/").startsWith("src/integration/")) continue;
+    if (rel.replace(/\\/g, "/").startsWith("src/security/")) continue;
     const isFileService =
       rel.replace(/\\/g, "/").endsWith("files/FileService.ts");
 

@@ -2,28 +2,31 @@
 
 **JARVIS Core** — fondation logicielle indépendante pour l’exécution contrôlée d’outils.
 
-Ce dépôt n’est **pas** Sophie. Sophie vit dans un autre repository ; l’intégration se fait via le **contrat Phase 12** (`SophieAPI` / signaux).
+Ce dépôt n’est **pas** Sophie. L’intégration se fait via le contrat Phase 12 (signaux).
 
-## Phase 1 → Phase 12
+## Phase 1 → Phase 15
 
-- **Phase 1–11** : Core → … → Context Awareness
-- **Phase 12** : Sophie Integration Contract (signaux typés, pas d’exécution)
+- **Phase 1–14** : Core → … → sécurité proactive (assess)
+- **Phase 15** : monitoring de sécurité cohérent (corrélation + alertes, sans action)
 
-Voir `docs/JARVIS_SOPHIE_INTEGRATION.md`.
+Voir `docs/JARVIS_SECURITY.md`.
 
 ## Démarrage rapide
 
 ```bash
 npm install
+npm run build:native   # optionnel, darwin + Xcode
 npm run jarvis
+# monitoring optionnel :
+JARVIS_SECURITY_MONITOR=1 npm run jarvis
 ```
 
 ## Validation
 
 ```bash
 npx tsc --noEmit
-# … phases 1–11 …
-npx --yes tsx tools/jarvis-integration-smoke.ts
-npx --yes tsx tools/integration-contract-test.ts
-npx --yes tsx tools/jarvis-integration-security-audit.ts
+npm run smoke:security
+npm run smoke:security-monitor
+npm run audit:security-monitor
+npm run sim:security-monitor
 ```

@@ -1,0 +1,90 @@
+JARVIS macOS NATIVE CAPABILITY — PHASE 13 REPORT
+================================================
+Generated: 2026-08-11
+Repository: sophie-jarvis
+Version: 0.13.0
+
+1. ARCHITECTURE
+---------------
+MacOS*Backend (TS) → optional jarvis_macos.node (N-API)
+  → AppKit / CoreGraphics / IOKit / ImageIO
+
+binding.gyp + src/platform/macos/native/addon/jarvis_macos.mm
+Loaders: jarvis_macos_bridge.ts / screen / user_activity + loadAddon.ts
+
+2. CAPABILITIES ACTIVATED (with compiled addon)
+-----------------------------------------------
+application.active / list(running) / open / close (graceful)
+user activity: HIDIdleTime → idleSeconds
+screen.info / windows / activeWindow / session
+screen.capture (HIGH, confirmation, in-memory, retention 0)
+
+3. STILL UNAVAILABLE / HONEST NULL
+------------------------------------
+Without build/Release/jarvis_macos.node → UNAVAILABLE
+session.locked / userPresent → null when unreliable
+idle never claimed as physical absence
+Critical apps (Finder, Dock, …) → DENYLIST
+
+4. PERMISSIONS
+--------------
+Accessibility — may be required for some frontmost queries
+Screen Recording — required for capture (TCC, never bypassed)
+No TCC bypass. PERMISSION_REQUIRED returned explicitly.
+
+5. NATIVE APIs
+--------------
+NSWorkspace / NSRunningApplication (open, terminate, frontmost, running)
+IOKit HIDIdleTime (aggregate idle only)
+NSScreen (displays)
+CGWindowListCopyWindowInfo (window metadata)
+CGSessionCopyCurrentDictionary (session; null-safe)
+CGDisplayCreateImage + ImageIO PNG (explicit capture)
+
+Forbidden: shell, osascript, forceTerminate, SIGKILL, CGEventPost,
+robotjs, camera, microphone, continuous capture loops.
+
+6. TESTS
+--------
+jarvis-macos-native-smoke.ts ......... 19/19 PASS (mocks)
+JARVIS_MACOS_NATIVE_TESTS=1 .......... 22/22 PASS (opt-in live)
+jarvis-macos-native-audit.ts ......... PASS
+
+7. PERFORMANCE (mock path sample)
+---------------------------------
+applicationActiveMs / List / Open / Close / activity /
+screenInfo / windowDiscovery measured on demand.
+No permanent polling / scheduler.
+
+8. CONTEXT / SOPHIE
+-------------------
+Phase 11 ContextService uses real backends when wired (CLI).
+Phase 12 unchanged — Sophie still signal-only (no macOS APIs).
+
+9. DOCUMENTATION
+----------------
+docs/JARVIS_MACOS_NATIVE.md (new)
+Updated: APPLICATION_CONTROL, SCREEN, USER_ACTIVITY, CONTEXT, README
+npm run build:native / smoke:macos-native / audit:macos-native
+
+10. LIMITATIONS
+---------------
+Addon must be built locally (Xcode / node-gyp).
+Capture needs Screen Recording permission.
+Window titles may be empty without Screen Recording.
+No Chrome automation / camera / voice / proactive AI in this phase.
+
+11. REGRESSIONS
+---------------
+npx tsc --noEmit ................... PASS
+Phases 1 → 12 ...................... PASS
+Phase 13 smoke + audit ............. PASS
+Opt-in live native (separate run) .. PASS
+No regressions observed.
+
+END OF PHASE 13 — STOP (do not start Phase 14).
+
+« JARVIS dispose maintenant de capacités macOS natives réelles et
+contrôlées. Les permissions restent explicites, les capacités
+indisponibles sont signalées honnêtement et aucune couche native ne
+contourne le modèle de sécurité de JARVIS. »

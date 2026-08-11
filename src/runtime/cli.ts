@@ -16,6 +16,12 @@ import { ScreenService } from "../screen/ScreenService.js";
 import { UserActivityService } from "../presence/UserActivityService.js";
 import { ContextService } from "../context/ContextService.js";
 import { SophieIntegration } from "../integration/SophieIntegration.js";
+import { SecurityService } from "../security/SecurityService.js";
+import { SecurityMonitor } from "../security/SecurityMonitor.js";
+import {
+  contextSnapshotToSecurityObservation,
+  contextSnapshotToSecuritySources,
+} from "../security/fromContext.js";
 import { ActionService } from "../actions/ActionService.js";
 import { ActionConfirmation } from "../actions/ActionConfirmation.js";
 import { IntentRouter } from "../ai/IntentRouter.js";
@@ -34,7 +40,10 @@ function banner(): void {
 `);
 }
 
-function createProductionRuntime(): JarvisRuntime {
+function createProductionRuntime(): {
+  runtime: JarvisRuntime;
+  securityMonitor: SecurityMonitor;
+} {
   const useMock = process.env.JARVIS_LLM_PROVIDER === "mock";
   const provider = useMock
     ? new MockLLMProvider()
@@ -65,6 +74,22 @@ function createProductionRuntime(): JarvisRuntime {
   const sophieIntegration = new SophieIntegration({
     getRuntimeState: () => runtime.getState(),
   });
+  const notifySophieAlert = (alert: {
+    level: string;
+    confidence: number;
+    category: string;
+    summary: string;
+  }) => {
+    sophieIntegration.notifySecurityAlert({
+      level: alert.level,
+      confidence: alert.confidence,
+      category: String(alert.category),
+      summary: alert.summary,
+    });
+  };
+  const securityService = new SecurityService({
+    onAlert: notifySophieAlert,
+  });
   const contextService = new ContextService({
     observation: new ObservationService(),
     applications: apps,
@@ -72,14 +97,36 @@ function createProductionRuntime(): JarvisRuntime {
     activity: new UserActivityService(),
     sophieSignals: () => sophieIntegration.getContextSignals(),
   });
+
+  const monitorEnabled = process.env.JARVIS_SECURITY_MONITOR === "1";
+  const securityMonitor = new SecurityMonitor(securityService, {
+    getObservation: async () => {
+      const snap = await contextService.getSnapshot("system.context");
+      return contextSnapshotToSecurityObservation(snap.snapshot);
+    },
+    getSources: async () => {
+      const snap = await contextService.getSnapshot("system.context");
+      return contextSnapshotToSecuritySources(snap.snapshot);
+    },
+    config: {
+      enabled: monitorEnabled,
+      observationIntervalMs: 30_000,
+      assessmentCooldownMs: 10_000,
+      alertCooldownMs: 60_000,
+    },
+    onAlert: notifySophieAlert,
+  });
+
   runtime = new JarvisRuntime({
     router,
     actions,
     contextService,
     sophieIntegration,
+    securityService,
+    securityMonitor,
     formatter: new ResponseFormatter(),
   });
-  return runtime;
+  return { runtime, securityMonitor };
 }
 
 async function main(): Promise<void> {
@@ -92,7 +139,14 @@ async function main(): Promise<void> {
     return;
   }
 
-  const runtime = createProductionRuntime();
+  const { runtime, securityMonitor } = createProductionRuntime();
+  if (securityMonitor.getConfig().enabled) {
+    securityMonitor.start();
+    console.log(
+      "(Security monitor: enabled — observation every 30s, alert only)",
+    );
+  }
+
   const formatter = new ResponseFormatter();
   const showTiming = process.argv.includes("--timing");
 
@@ -107,6 +161,12 @@ async function main(): Promise<void> {
     output: process.stdout,
   });
 
+  const shutdown = (): void => {
+    securityMonitor.stop();
+    console.log("Sophie > À bientôt.");
+    rl.close();
+  };
+
   const prompt = (): void => {
     rl.question("You > ", async (line) => {
       const text = line.trim();
@@ -115,8 +175,7 @@ async function main(): Promise<void> {
         return;
       }
       if (/^(exit|quit|q)$/i.test(text)) {
-        console.log("Sophie > À bientôt.");
-        rl.close();
+        shutdown();
         return;
       }
       try {

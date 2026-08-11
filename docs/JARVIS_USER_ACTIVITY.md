@@ -137,13 +137,15 @@ Prefer on-demand reads. If polling is ever required: configurable interval, no r
 
 ## Native implementation (macOS)
 
-`MacOSUserActivityBackend` may load an approved N-API bridge that returns **only** aggregate idle seconds.
+`MacOSUserActivityBackend` loads the optional Phase 13 N-API bridge (`jarvis_macos.node`) that returns **only** aggregate idle seconds via IOKit `HIDIdleTime`.
 
-Forbidden: event taps, IOHID interception, key/mouse hooks, AppleScript/osascript, shell `exec`/`spawn`, clipboard, camera, mic.
+Forbidden: event taps, IOHID key/mouse hooks, AppleScript/osascript, shell `exec`/`spawn`, clipboard, camera, mic.
 
 Without the bridge → honest `UNAVAILABLE` / `UNKNOWN`. Never fake activity.
 
-Opt-in real read: `JARVIS_MACOS_USER_ACTIVITY_TESTS=1` (idle duration only).
+Opt-in real read: `JARVIS_MACOS_NATIVE_TESTS=1` or `JARVIS_MACOS_USER_ACTIVITY_TESTS=1`.
+
+See `docs/JARVIS_MACOS_NATIVE.md`.
 
 ---
 
@@ -170,6 +172,7 @@ Never: exact idle when unnecessary, keys, mouse events, coordinates, typed conte
 
 ## Limitations
 
-- No physical presence proof
-- Native idle requires approved bridge (not shipped by default)
-- Observation only — no security automation in this phase
+- No physical presence proof (idle ≠ absent)
+- Native idle requires compiled addon (`npm run build:native`)
+- Observation only — no security automation from activity signals
+- IDLE never auto-triggers kill/close/delete

@@ -1,0 +1,239 @@
+JARVIS PROACTIVE SECURITY & THREAT AWARENESS — PHASE 14 REPORT
+==============================================================
+Generated: 2026-08-11
+Repository: sophie-jarvis
+Version: 0.14.0
+
+MODE: DETECTION + ANALYSIS + ALERT ONLY
+RULE: Context/signals may alert. They must NEVER trigger automatic system actions.
+
+FINAL FLOW
+----------
+JARVIS OBSERVE
+        ↓
+JARVIS CORRELATES
+        ↓
+JARVIS ASSESSES
+        ↓
+JARVIS EXPLAINS
+        ↓
+HUMAN DECIDES
+
+1. ARCHITECTURE SECURITY
+------------------------
+Observation → Context → SecuritySignals → ThreatAssessment → RiskLevel → Alert
+Optional: Sophie outbound `security_alert` (presentation metadata only)
+
+src/security/
+  types.ts
+  SecuritySignal.ts
+  SecuritySignalCollector.ts
+  SecurityBaseline.ts
+  ThreatAssessment.ts
+  ThreatAssessmentEngine.ts
+  SecurityAlert.ts
+  SecurityAuditLog.ts
+  SecurityService.ts
+  SecuritySimulator.ts
+  fromContext.ts
+  index.ts
+  SecurityEvent.ts (Phase 1 retained)
+
+Tools: security.status | security.alerts | security.assess (READ / ANALYZE ONLY)
+Runtime: JarvisRuntime.handleSecurityIntent
+Sophie: notifySecurityAlert → security_alert { level, confidence, category, summary }
+
+Security layer does NOT import:
+  ActionExecutor, PermissionManager, FileService, ApplicationService,
+  AnimationPlayer, BehaviorBrain
+
+2. SECURITY SIGNAL MODEL
+------------------------
+SecuritySignal { id, category, kind, severity, confidence, timestamp, source, evidence, reason }
+
+Categories: USER_PRESENCE | APPLICATION | SCREEN | FILE | SYSTEM | SESSION | ENVIRONMENT
+Severities: INFO | LOW | MEDIUM | HIGH | CRITICAL
+CRITICAL = highest alert severity only — never auto-action.
+
+Vocabulary: ANOMALY / SUSPICIOUS / UNUSUAL / UNKNOWN / HIGH_RISK_SIGNAL
+Always with confidence + evidence + reason.
+Never claims virus / malware / hacker / intrusion without dedicated proof.
+
+3. BASELINE
+-----------
+SecurityBaseline — bounded in-memory only (history ≤ 8)
+Non-persistent by default
+Stores metadata keys only (apps, idle, file fingerprints provided, memory/uptime)
+Never stores: screenshots, passwords, file contents, keystrokes, clipboard, camera, mic
+
+4. THREAT ASSESSMENT ENGINE
+---------------------------
+ThreatAssessmentEngine — simple explainable scoring + light temporal correlation (~15 min window)
+SecuritySequence kinds list for correlated idle → app → frontmost → file patterns
+Conservative: prefers unknown over false accusation
+Benign app hints (Spotify, Chrome, Safari, Cursor, …) capped ≤ LOW when isolated
+
+5. CORRELATION
+--------------
+On-demand assess only — no permanent scheduler, no aggressive setInterval loop in security layer
+Sequence example: user idle + new/unknown app + frontmost change + file metadata change
+
+6. SECURITY ALERT
+-----------------
+SecurityAlert { id, level, confidence, title, summary, reasons, evidence, timestamp, requiresUserAttention, category }
+Always appends: "Aucune action n'a été prise."
+Disclaimer: not virus/malware/intrusion confirmation
+Bounded alert history ≤ 32; signal history ≤ 128
+
+7. RUNTIME INTEGRATION
+----------------------
+USER → JarvisRuntime → security.* intents → SecurityService → ResponseFormatter.securityMessage → USER
+MockLLM routes FR questions like "pendant mon absence" → security.assess
+Never plans/executes actions from security branch
+
+8. SOPHIE SIGNAL INTEGRATION
+----------------------------
+Outbound only: security_alert
+Forbidden on this path: command, shell, animation, stateOverride, requestState, ActionExecutor
+Sophie decides visual presentation later — Phase 14 does not add animations
+
+9. FALSE-POSITIVE ANALYSIS
+--------------------------
+Smoke: Spotify while idle must not reach HIGH/CRITICAL — PASSED
+Simulation benign kinds (normal_work, gaming, coding, idle, benign_spotify/chrome, return_after_idle)
+must not produce HIGH/CRITICAL — measured below
+
+10. SIMULATION RESULTS (NOT REAL DETECTIONS)
+--------------------------------------------
+MODE: SIMULATION
+count: 3000
+false_positive_rate (benign → HIGH/CRITICAL): 0.0000
+falsePositiveHighOrAbove: 0
+
+severity_distribution:
+  INFO: 2750
+  LOW: 0
+  MEDIUM: 250
+  HIGH: 0
+  CRITICAL: 0
+
+alert_distribution:
+  NONE: 2000
+  INFO: 750
+  LOW: 0
+  MEDIUM: 250
+  HIGH: 0
+  CRITICAL: 0
+
+confidence_buckets:
+  0.0-0.3: 750
+  0.3-0.5: 2000
+  0.5-0.7: 0
+  0.7-1.0: 250
+
+Do NOT present these numbers as live endpoint detections.
+
+11. PERFORMANCE (REAL MEASUREMENTS, NO PROMISES)
+------------------------------------------------
+Sample REAL_RUNTIME OBSERVATION path (in-process SecurityService.assess after seedBaseline):
+  signalCollectionMs: 0
+  baselineMs: 0
+  assessmentMs: 1
+  correlationMs: 1
+  alertFormattingMs: 0
+  totalSecurityMs: 1
+level/confidence sample: MEDIUM / ~0.70
+
+Measurements only — no SLA claimed.
+
+12. SECURITY AUDIT
+------------------
+tools/jarvis-security-audit.ts — PASSED (14 files scanned)
+Forbidden absences verified in src/security + securityAssess.ts:
+  child_process, exec/spawn/fork, shell:true, osascript, CGEventPost,
+  robotjs, nut.js, fetch, getUserMedia, setInterval, camera, microphone,
+  ActionExecutor, PermissionManager, FileService, ApplicationService,
+  AnimationPlayer, BehaviorBrain
+
+Regression Phases 1–14: ALL PASSED (2026-08-11)
+security-invariants allowlists updated for Phase 14 docs/tools/report
+
+13. PRIVACY AUDIT
+-----------------
+No automatic screenshot / capture / OCR in security layer
+No disk-wide scan; file signals only on provided keys
+No ~/.ssh / System / Library access introduced here
+Baseline/alerts JSON smoke: no password/screenshot/clipboard/keycode leakage
+Sophie payload: sanitized level/category + summary ≤ 240 chars
+
+14. DOCUMENTATION
+-----------------
+docs/JARVIS_SECURITY.md (includes mandatory WHAT JARVIS CANNOT CLAIM)
+README.md updated to Phase 14 / 0.14.0
+npm scripts: smoke:security, audit:security
+
+15. LIMITATIONS (PRECISE)
+-------------------------
+- Not an antivirus or EDR
+- Cannot confirm malware, virus, hacker, or intrusion
+- Cannot prove physical presence or identity
+- IDLE ≠ ABSENT
+- No network/firewall/quarantine/blocking
+- No automatic file/app/process mutation from alerts
+- No camera, microphone, SMS, calls, browser automation, input injection
+- Baseline is session memory only — no durable threat memory
+- Confidence is capped; unknown preferred over accusation
+- File anomalies require explicitly supplied metadata (policy paths upstream)
+- Screen anomalies are window metadata only — no content analysis
+
+WHAT JARVIS CANNOT CLAIM
+------------------------
+virus detection
+malware detection
+hacker detection
+physical presence
+identity recognition
+intrusion confirmation
+
+(unless a future dedicated capability provides real evidence)
+
+DELIVERABLE CHECKLIST
+---------------------
+[x] Architecture Security
+[x] SecuritySignal model
+[x] Baseline
+[x] ThreatAssessmentEngine
+[x] Correlation
+[x] SecurityAlert
+[x] Runtime integration
+[x] Sophie signal integration
+[x] False-positive analysis
+[x] Simulation results (labeled SIMULATION)
+[x] Performance measurements (real sample)
+[x] Security audit
+[x] Privacy audit
+[x] Documentation
+[x] Limitations list
+
+TESTS EXECUTED
+--------------
+npx tsc --noEmit
+npx tsx tools/jarvis-core-smoke.ts
+npx tsx tools/jarvis-observation-smoke.ts
+npx tsx tools/jarvis-file-control-smoke.ts
+npx tsx tools/jarvis-application-control-smoke.ts
+npx tsx tools/jarvis-macos-application-backend-smoke.ts
+npx tsx tools/jarvis-screen-observation-smoke.ts
+npx tsx tools/jarvis-user-activity-smoke.ts
+npx tsx tools/jarvis-action-execution-smoke.ts
+npx tsx tools/jarvis-llm-smoke.ts
+npx tsx tools/jarvis-runtime-smoke.ts
+npx tsx tools/jarvis-context-smoke.ts
+npx tsx tools/jarvis-integration-smoke.ts
+npx tsx tools/jarvis-macos-native-smoke.ts
+npx tsx tools/jarvis-security-smoke.ts
+npx tsx tools/jarvis-security-audit.ts
+→ ALL PASSED
+
+STOP.
+Phase 15 not started.

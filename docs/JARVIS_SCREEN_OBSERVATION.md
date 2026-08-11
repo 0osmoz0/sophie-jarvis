@@ -77,9 +77,11 @@ Screen Recording may be required for windows/capture when a bridge exists — ne
 
 ## Limitations
 
-- Without compiled native bridge, real display/window/capture stay UNAVAILABLE
+- Without compiled native bridge (`npm run build:native`), real display/window/capture stay UNAVAILABLE
+- Phase 13 activates CoreGraphics / ImageIO via `jarvis_macos.node` when present
+- Screen Recording TCC may be required for capture — never bypassed
 - No mouse/keyboard/clipboard automation
 - No OCR / face recognition
 - No continuous surveillance
 
-**Do not start Phase 7** without human validation.
+See `docs/JARVIS_MACOS_NATIVE.md`.

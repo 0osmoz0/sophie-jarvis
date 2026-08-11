@@ -158,3 +158,11 @@ npm run smoke:context
 npm run audit:context
 npm run audit:context-security
 ```
+
+## macOS backends (Phase 13)
+
+Lorsque `jarvis_macos.node` est compilé, `system.context` / `application.status` / `screen.status` / `user.status` peuvent refléter des données natives réelles via les services existants.
+
+Le contexte reste **informatif** — jamais d’action automatique (ex. CPU élevé ≠ kill).
+
+Voir `docs/JARVIS_MACOS_NATIVE.md`.

@@ -29,6 +29,10 @@ export class ResponseFormatter {
     return { type: "message", message };
   }
 
+  securityMessage(message: string): JarvisResponse {
+    return { type: "message", message };
+  }
+
   noAction(reason?: string): JarvisResponse {
     return {
       type: "message",

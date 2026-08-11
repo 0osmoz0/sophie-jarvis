@@ -223,6 +223,31 @@ export class SophieIntegration {
     });
   }
 
+  /**
+   * Outbound security alert metadata for Sophie UI only.
+   * Never includes commands, shell, animation overrides, or executor hooks.
+   */
+  notifySecurityAlert(alert: {
+    level: string;
+    confidence: number;
+    category: string;
+    summary: string;
+  }): void {
+    const level = sanitizeId(alert.level) ?? "INFO";
+    const category = sanitizeId(alert.category) ?? "CORRELATED";
+    const summary = String(alert.summary ?? "")
+      .replace(/[\r\n]+/g, " ")
+      .slice(0, 240);
+    this.bus.emit({
+      type: "security_alert",
+      timestamp: this.now(),
+      level,
+      confidence: Math.max(0, Math.min(1, Number(alert.confidence) || 0)),
+      category,
+      summary,
+    });
+  }
+
   getSnapshot(): SophiePublicSnapshot {
     const snapStart = this.now();
     const activity = this.memory.lastUserSignal?.type ?? null;

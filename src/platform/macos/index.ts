@@ -30,3 +30,10 @@ export {
   tryLoadMacOSUserActivityBridge,
 } from "./MacOSUserActivityBackend.js";
 export type { MacOSUserActivityBackendOptions } from "./MacOSUserActivityBackend.js";
+
+export {
+  loadJarvisMacosAddon,
+  resetAddonCache,
+  getAddonCandidates,
+} from "./native/loadAddon.js";
+export type { JarvisMacosNativeAddon } from "./native/loadAddon.js";

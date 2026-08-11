@@ -6,9 +6,15 @@ import type {
   IntentRouterOutcome,
   JarvisActionIntentType,
   JarvisContextIntentType,
+  JarvisSecurityIntentType,
   JarvisIntent,
 } from "./types.js";
-import { AI_ERROR_CODES, AI_LIMITS, JARVIS_CONTEXT_INTENT_TYPES } from "./types.js";
+import {
+  AI_ERROR_CODES,
+  AI_LIMITS,
+  JARVIS_CONTEXT_INTENT_TYPES,
+  JARVIS_SECURITY_INTENT_TYPES,
+} from "./types.js";
 
 export interface IntentRouterOptions {
   provider: LLMProvider;
@@ -93,7 +99,8 @@ export class IntentRouter {
               ? AI_ERROR_CODES.NEEDS_CLARIFICATION
               : outcome.kind === "conversation" ||
                   outcome.kind === "no_action" ||
-                  outcome.kind === "context"
+                  outcome.kind === "context" ||
+                  outcome.kind === "security"
                 ? AI_ERROR_CODES.NO_ACTION
                 : outcome.kind === "provider_error"
                   ? outcome.status
@@ -103,6 +110,8 @@ export class IntentRouter {
               ? outcome.intent.payload.question
               : outcome.kind === "context"
                 ? "Context intent is read-only (not an action plan)"
+              : outcome.kind === "security"
+                ? "Security intent is read-only (not an action plan)"
                 : outcome.kind === "rejected"
                   ? outcome.message
                   : outcome.kind === "provider_error"
@@ -159,6 +168,17 @@ function classifyIntent(intent: JarvisIntent): IntentRouterOutcome {
           intent: intent as Extract<
             JarvisIntent,
             { type: JarvisContextIntentType }
+          >,
+        };
+      }
+      if (
+        (JARVIS_SECURITY_INTENT_TYPES as readonly string[]).includes(intent.type)
+      ) {
+        return {
+          kind: "security",
+          intent: intent as Extract<
+            JarvisIntent,
+            { type: JarvisSecurityIntentType }
           >,
         };
       }

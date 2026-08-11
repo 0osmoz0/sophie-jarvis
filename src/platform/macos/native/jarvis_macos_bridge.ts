@@ -1,10 +1,40 @@
 /**
- * Placeholder for a future optional N-API bridge module.
- * This file documents the export shape; it is NOT a working native binding.
- * Import of `./native/jarvis_macos_bridge.js` is expected to fail until an
- * approved compiled addon is added in a later validated phase.
- *
- * Export shape (when implemented):
- *   export default bridge: MacOSNativeBridge
+ * Phase 13 — optional NSWorkspace application bridge.
+ * Loads compiled jarvis_macos.node when present; otherwise exports no bridge.
  */
-export {};
+import type { MacOSNativeBridge } from "../MacOSApplicationBackend.types.js";
+import { loadJarvisMacosAddon } from "./loadAddon.js";
+
+function createBridge(): MacOSNativeBridge | undefined {
+  const addon = loadJarvisMacosAddon();
+  if (!addon) return undefined;
+  return {
+    async listRunningApplications() {
+      return addon.listRunningApplications();
+    },
+    async getFrontmostApplication() {
+      return addon.getFrontmostApplication();
+    },
+    async openApplication(identity) {
+      return addon.openApplication(
+        identity.bundleId ?? null,
+        identity.path ?? null,
+      );
+    },
+    async terminateApplicationGracefully(identity) {
+      return addon.terminateApplicationGracefully(
+        identity.bundleId ?? null,
+        identity.path ?? null,
+      );
+    },
+    async isApplicationRunning(identity) {
+      return addon.isApplicationRunning(
+        identity.bundleId ?? null,
+        identity.path ?? null,
+      );
+    },
+  };
+}
+
+export const bridge: MacOSNativeBridge | undefined = createBridge();
+export default bridge;

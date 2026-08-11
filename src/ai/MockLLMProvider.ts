@@ -129,6 +129,40 @@ export class MockLLMProvider implements LLMProvider {
       );
     }
 
+    // Phase 14 — read-only security intents (before generic context)
+    if (
+      /pendant mon absence|quelque chose d['']inhabituel|activité (suspecte|inhabituelle)|security assess|évaluation (de )?sécurité|alerte(s)? de sécurité|est[- ]ce qu['']il s['']est passé/i.test(
+        text,
+      )
+    ) {
+      return this.wrapRaw(
+        JSON.stringify({ type: "security.assess", payload: {} }),
+      );
+    }
+    if (
+      /alertes? (de )?sécurité|security alerts|quelles alertes/i.test(text)
+    ) {
+      return this.wrapRaw(
+        JSON.stringify({ type: "security.alerts", payload: {} }),
+      );
+    }
+    if (
+      /statut (du )?monitor(ing)?|security monitor status|état (du )?monitoring|monitor de sécurité/i.test(
+        text,
+      )
+    ) {
+      return this.wrapRaw(
+        JSON.stringify({ type: "security.monitor.status", payload: {} }),
+      );
+    }
+    if (
+      /statut (de )?sécurité|security status|état (de la )?sécurité/i.test(text)
+    ) {
+      return this.wrapRaw(
+        JSON.stringify({ type: "security.status", payload: {} }),
+      );
+    }
+
     // Phase 11 — read-only context intents
     if (
       /qu['']est[- ]ce qui se passe|ce qui se passe sur (mon |le )?mac|état (du|de mon) (mac|système)|snapshot/i.test(

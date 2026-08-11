@@ -2,6 +2,7 @@ export type {
   LLMProviderStatus,
   JarvisActionIntentType,
   JarvisContextIntentType,
+  JarvisSecurityIntentType,
   JarvisIntent,
   LLMUnderstandRequest,
   LLMUnderstandResult,
@@ -12,6 +13,7 @@ export type {
 export {
   JARVIS_ACTION_INTENT_TYPES,
   JARVIS_CONTEXT_INTENT_TYPES,
+  JARVIS_SECURITY_INTENT_TYPES,
   NON_ACTION_INTENT_TYPES,
   AI_ERROR_CODES,
   AI_LIMITS,

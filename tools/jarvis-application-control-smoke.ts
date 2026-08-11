@@ -325,7 +325,14 @@ async function main(): Promise<void> {
   await test("default ApplicationService open/close unavailable", async () => {
     const registry = new ApplicationRegistry();
     seedRegistry(registry);
-    const svc = new ApplicationService({ registry });
+    // Force honest UNAVAILABLE path (Phase 13 may load a real addon by default).
+    const { MacOSApplicationBackend } = await import(
+      "../src/platform/macos/MacOSApplicationBackend.js"
+    );
+    const svc = new ApplicationService({
+      registry,
+      backend: new MacOSApplicationBackend({ skipNativeLoad: true }),
+    });
     const open = await svc.open({ name: "JarvisTestApp", confirmed: true });
     assert(open.success === false, "open unavailable");
     assert(

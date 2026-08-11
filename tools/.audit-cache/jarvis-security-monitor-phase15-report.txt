@@ -1,0 +1,148 @@
+JARVIS SECURITY MONITOR — PHASE 15 REPORT
+==========================================
+
+VERSION:
+0.15.0
+Generated: 2026-08-11
+Repository: sophie-jarvis
+
+MODE: MONITORING + CORRELATION + ALERTING ONLY
+RULE: JARVIS OBSERVE → CORRELATES → ASSESSES → EXPLAINS → HUMAN DECIDES
+
+=== PHASE 15 PRE-AUDIT (before changes) ===
+Observation sources: ContextService → ObservationService/Apps/Screen/Activity (read-only)
+Context sources: system/applications/screen/activity/presence/files
+Security signals: SecuritySignalCollector vs SecurityBaseline (on-demand assess only)
+Threat assessment: ThreatAssessmentEngine (15min correlation window)
+Alert pipeline: SecurityService.assess → alertsFromAssessment → onAlert → Sophie security_alert
+Missing pieces (Phase 14): continuous monitor, controlled polling, dedup, severity hysteresis,
+  security.monitor.status, adaptive habitual baseline, concurrent assess guard
+Potential regressions: soft-update baseline absorbing anomalies; setInterval ban; Sophie spam
+
+MONITOR
+-------
+status: configurable (DISABLED by default in CLI; enable with JARVIS_SECURITY_MONITOR=1)
+enabled: false by default / true when env set
+interval: 30000ms (min floor 5000ms)
+assessment cooldown: 10000ms
+alert cooldown: 60000ms
+scheduler: recursive setTimeout (NOT setInterval)
+concurrent assessments: blocked
+clean shutdown: stop() cancels timer
+
+OBSERVATION
+-----------
+sources: injected getObservation() (CLI wires ContextService snapshot)
+availability: system/applications/screen/activity/files reported via getSources()
+latency: measured per tick (observationMs / contextMs)
+
+CORRELATION
+-----------
+sequences: idle → new/unusual app → frontmost → file change (Phase 14 engine + Phase 15 kinds)
+baseline: adaptive habitual app frequency (bounded ≤64 keys, threshold 3)
+deduplication: SecurityAlertDeduper (fingerprint category|reasons; firstSeen/lastSeen/occurrences)
+severity stability: SeverityStabilizer (escalate confirmations=2, decay quiet ticks=3)
+
+ALERTS
+------
+Simulation (SIMULATION mode, count=2000) severity distribution:
+  INFO: 1800
+  LOW: 200
+  MEDIUM: 0
+  HIGH: 0
+  CRITICAL: 0
+
+FALSE POSITIVES
+---------------
+SIMULATION false_positive_rate (benign → HIGH/CRITICAL): 0.0000
+falsePositiveHigh: 0
+Smoke: Spotify+idle stays ≤ LOW — PASSED
+Normal scenarios (coding/gaming/browsing/music/Chrome/Safari/Cursor) do not auto-HIGH
+
+SIMULATION
+----------
+mode: SIMULATION
+count: 2000
+normal: 1400
+unusual: 500
+correlated: 100
+(Do NOT present as live detections.)
+
+PERFORMANCE
+-----------
+REAL measurements (in-process ticks, no SLA promises):
+
+Simulation 2000 dual-ticks:
+  average: ~0.034ms
+  p50: 0ms
+  p95: 0ms
+  max: 1ms
+
+Benchmark 100 observations:
+  average: ~0ms  p50: 0  p95: 0  max: 0
+
+Benchmark 1000 simulated observations:
+  average: ~0.008ms  p50: 0  p95: 0  max: 1
+
+SECURITY AUDIT
+--------------
+tools/jarvis-security-monitor-audit.ts — PASSED (18 files)
+Forbidden absences in src/security + securityAssess.ts:
+  ActionExecutor, PermissionManager, FileService, ApplicationService,
+  child_process, exec/spawn/fork, shell, osascript, CGEventPost, robotjs, nut.js,
+  fetch, camera, microphone, setInterval
+Phase 14 security audit still PASSED (setInterval still absent; setTimeout used only in monitor)
+
+PRIVACY AUDIT
+-------------
+No automatic screenshot/capture/OCR
+No disk-wide scan
+No passwords/clipboard/keystrokes in baseline
+Sophie payload sanitized (level/confidence/category/summary≤240)
+Monitor learns frequency keys only — not user content
+
+SOPHIE
+------
+security_alert: yes (metadata only)
+payload sanitized: yes
+no automatic action: yes
+no animation / stateOverride / command / shell: yes
+
+REGRESSION
+----------
+npx tsc --noEmit — PASSED
+Phases 1→14 smokes + audits — PASSED
+jarvis-security-monitor-smoke — 16/16 PASSED
+jarvis-security-monitor-audit — PASSED
+jarvis-security-monitor-simulation — PASSED
+
+LIMITATIONS
+-----------
+- Not antivirus / EDR / malware confirmation
+- IDLE ≠ physical absence
+- Monitor default OFF (opt-in via JARVIS_SECURITY_MONITOR=1)
+- File signals still limited by Context metadata richness
+- No network/firewall/quarantine/blocking
+- No camera/mic/SMS/calls/input injection
+- Explanation path never auto-captures on "montre-moi"
+- Confidence capped; prefers UNKNOWN over false accusation
+
+DELIVERABLES
+------------
+[x] SecurityMonitor (src/security/SecurityMonitor.ts)
+[x] Controlled polling (setTimeout recursive)
+[x] Adaptive baseline habits
+[x] New anomaly kinds
+[x] Alert deduplication
+[x] Severity hysteresis
+[x] security.monitor.status
+[x] Sophie security_alert (unchanged contract)
+[x] Smoke / audit / simulation tools
+[x] docs/JARVIS_SECURITY.md updated
+[x] Version 0.15.0
+
+PHASE 16
+--------
+NOT STARTED
+
+STOP.

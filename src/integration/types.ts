@@ -42,7 +42,8 @@ export type SophieOutputEventType =
   | "behavior_started"
   | "behavior_finished"
   | "user_interaction"
-  | "state_changed";
+  | "state_changed"
+  | "security_alert";
 
 export const SOPHIE_INPUT_EVENT_TYPES: readonly SophieInputEventType[] = [
   "user_returned",
@@ -67,6 +68,7 @@ export const SOPHIE_OUTPUT_EVENT_TYPES: readonly SophieOutputEventType[] = [
   "behavior_finished",
   "user_interaction",
   "state_changed",
+  "security_alert",
 ] as const;
 
 export interface SophieEventBase {
@@ -190,11 +192,22 @@ export interface StateChangedEvent {
   previousState?: string;
 }
 
+/** High-level security alert for Sophie presentation only — no commands. */
+export interface SecurityAlertSophieEvent {
+  type: "security_alert";
+  timestamp: number;
+  level: string;
+  confidence: number;
+  category: string;
+  summary: string;
+}
+
 export type SophieOutputEvent =
   | BehaviorStartedEvent
   | BehaviorFinishedEvent
   | UserInteractionEvent
-  | StateChangedEvent;
+  | StateChangedEvent
+  | SecurityAlertSophieEvent;
 
 export type SophieEvent = SophieInputEvent | SophieOutputEvent;
 

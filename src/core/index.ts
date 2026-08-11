@@ -263,3 +263,39 @@ export {
 
 export type { SecurityEvent, SecurityEventSeverity } from "../security/SecurityEvent.js";
 export { createSecurityEvent } from "../security/SecurityEvent.js";
+
+export {
+  SecurityService,
+  SecurityBaseline,
+  SecuritySignalCollector,
+  ThreatAssessmentEngine,
+  MemorySecurityAuditLog,
+  runSecuritySimulation,
+  formatAlertMessage,
+  contextSnapshotToSecurityObservation,
+  contextSnapshotToSecuritySources,
+  SecurityMonitor,
+  formatMonitorStatus,
+  SecurityAlertDeduper,
+  SeverityStabilizer,
+  SECURITY_DISCLAIMER,
+  DEFAULT_SECURITY_MONITOR_CONFIG,
+} from "../security/index.js";
+export type {
+  SecuritySignal,
+  SecurityAlert,
+  ThreatAssessment,
+  SecurityObservationInput,
+  SecurityAssessResult,
+  SecurityMonitorState,
+  SecurityMonitorConfig,
+  SecurityMonitorStatusReport,
+  DedupedSecurityAlert,
+} from "../security/index.js";
+
+export {
+  createSecurityStatusTool,
+  createSecurityAlertsTool,
+  createSecurityAssessTool,
+  createSecurityMonitorStatusTool,
+} from "../tools/securityAssess.js";

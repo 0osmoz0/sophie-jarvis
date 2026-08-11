@@ -6,6 +6,14 @@ import type { ContextQueryKind } from "../context/types.js";
 import { ContextFormatter } from "../context/ContextFormatter.js";
 import type { SophieIntegration } from "../integration/SophieIntegration.js";
 import type { SophieEmitResult } from "../integration/types.js";
+import type { SecurityService } from "../security/SecurityService.js";
+import type { SecurityMonitor } from "../security/SecurityMonitor.js";
+import type { JarvisSecurityIntentType } from "../ai/types.js";
+import {
+  contextSnapshotToSecurityObservation,
+} from "../security/fromContext.js";
+import { formatAlertMessage } from "../security/SecurityAlert.js";
+import { formatMonitorStatus } from "../security/SecurityMonitor.js";
 import {
   ConversationContext,
   isAffirmative,
@@ -28,6 +36,10 @@ export interface JarvisRuntimeOptions {
   contextService?: ContextService;
   /** Optional Phase 12 Sophie signal integration (never executes actions). */
   sophieIntegration?: SophieIntegration;
+  /** Optional Phase 14 security detection (never executes actions). */
+  securityService?: SecurityService;
+  /** Optional Phase 15 security monitor (alert only). */
+  securityMonitor?: SecurityMonitor;
   formatter?: ResponseFormatter;
   context?: ConversationContext;
   audit?: RuntimeAuditSink;
@@ -51,6 +63,8 @@ export class JarvisRuntime {
   private readonly actions: ActionService;
   private readonly contextService: ContextService | undefined;
   private readonly sophieIntegration: SophieIntegration | undefined;
+  private readonly securityService: SecurityService | undefined;
+  private readonly securityMonitor: SecurityMonitor | undefined;
   private readonly contextFormatter = new ContextFormatter();
   private readonly formatter: ResponseFormatter;
   private readonly context: ConversationContext;
@@ -63,6 +77,8 @@ export class JarvisRuntime {
     this.actions = options.actions;
     this.contextService = options.contextService;
     this.sophieIntegration = options.sophieIntegration;
+    this.securityService = options.securityService;
+    this.securityMonitor = options.securityMonitor;
     this.formatter = options.formatter ?? new ResponseFormatter();
     this.context = options.context ?? new ConversationContext();
     this.audit = options.audit ?? new MemoryRuntimeAuditLog();
@@ -196,6 +212,156 @@ export class JarvisRuntime {
       return this.finish(
         interactionId,
         this.formatter.contextMessage(message, result.snapshot),
+        "IDLE",
+        timing,
+        totalStart,
+        query,
+        "OK",
+      );
+    } catch (err) {
+      return this.finish(
+        interactionId,
+        this.formatter.error(
+          RUNTIME_ERROR_CODES.ERROR,
+          err instanceof Error ? err.message : String(err),
+        ),
+        "ERROR",
+        timing,
+        totalStart,
+        query,
+        "ERROR",
+      );
+    }
+  }
+
+  /**
+   * Phase 14 — security detection intents. Never plans or executes actions.
+   */
+  private async handleSecurityIntent(
+    query: JarvisSecurityIntentType,
+    interactionId: string,
+    timing: InteractionTiming,
+    totalStart: number,
+  ): Promise<ProcessInputResult> {
+    if (query === "security.monitor.status") {
+      if (!this.securityMonitor) {
+        return this.finish(
+          interactionId,
+          this.formatter.unavailable(
+            "Le moniteur de sécurité n'est pas configuré.",
+          ),
+          "ERROR",
+          timing,
+          totalStart,
+          query,
+          "UNAVAILABLE",
+        );
+      }
+      const report = this.securityMonitor.statusReport();
+      return this.finish(
+        interactionId,
+        this.formatter.securityMessage(formatMonitorStatus(report)),
+        "IDLE",
+        timing,
+        totalStart,
+        query,
+        "OK",
+      );
+    }
+
+    if (!this.securityService) {
+      return this.finish(
+        interactionId,
+        this.formatter.unavailable(
+          "Le service de sécurité n'est pas configuré.",
+        ),
+        "ERROR",
+        timing,
+        totalStart,
+        query,
+        "UNAVAILABLE",
+      );
+    }
+    try {
+      if (query === "security.status") {
+        const status = this.securityService.status();
+        const message = [
+          "Mode : détection uniquement (aucune action automatique).",
+          `Baseline : ${status.baselineReady ? "prête" : "absente"}`,
+          `Signaux en mémoire : ${status.signalCount}`,
+          `Alertes en mémoire : ${status.alertCount}`,
+          status.lastAssessment
+            ? `Dernière évaluation : ${status.lastAssessment.level} (confiance ${status.lastAssessment.confidence.toFixed(2)})`
+            : "Aucune évaluation récente.",
+        ].join("\n");
+        return this.finish(
+          interactionId,
+          this.formatter.securityMessage(message),
+          "IDLE",
+          timing,
+          totalStart,
+          query,
+          "OK",
+        );
+      }
+
+      if (query === "security.alerts") {
+        const alerts = this.securityService.alerts();
+        if (alerts.length === 0) {
+          return this.finish(
+            interactionId,
+            this.formatter.securityMessage(
+              "Aucune alerte de sécurité en mémoire pour cette session.",
+            ),
+            "IDLE",
+            timing,
+            totalStart,
+            query,
+            "OK",
+          );
+        }
+        const message = alerts.map(formatAlertMessage).join("\n\n---\n\n");
+        return this.finish(
+          interactionId,
+          this.formatter.securityMessage(message),
+          "IDLE",
+          timing,
+          totalStart,
+          query,
+          "OK",
+        );
+      }
+
+      // security.assess — explain available evidence only; never capture/act
+      let obs;
+      if (this.contextService) {
+        const snap = await this.contextService.getSnapshot("system.context");
+        obs = contextSnapshotToSecurityObservation(snap.snapshot);
+      } else {
+        obs = { timestamp: this.now() };
+      }
+      const result = this.securityService.assess(obs);
+      let message: string;
+      if (result.alerts.length > 0) {
+        message = [
+          ...result.alerts.map(formatAlertMessage),
+          "",
+          "Je peux expliquer les indices disponibles. Aucune capture ni action n'a été déclenchée.",
+        ].join("\n\n");
+      } else {
+        message = [
+          "Rien d'inhabituel d'après la baseline récente.",
+          `Niveau : ${result.assessment.level}`,
+          `Confiance : ${result.assessment.confidence.toFixed(2)}`,
+          `Présence (indicateur logiciel) : ${result.assessment.presence}`,
+          "",
+          result.assessment.disclaimer,
+          "Aucune action n'a été prise.",
+        ].join("\n");
+      }
+      return this.finish(
+        interactionId,
+        this.formatter.securityMessage(message),
         "IDLE",
         timing,
         totalStart,
@@ -413,6 +579,15 @@ export class JarvisRuntime {
     if (outcome.kind === "context") {
       return this.handleContextIntent(
         outcome.intent.type as ContextQueryKind,
+        interactionId,
+        timing,
+        totalStart,
+      );
+    }
+
+    if (outcome.kind === "security") {
+      return this.handleSecurityIntent(
+        outcome.intent.type,
         interactionId,
         timing,
         totalStart,

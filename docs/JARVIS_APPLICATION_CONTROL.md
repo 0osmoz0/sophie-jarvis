@@ -197,6 +197,7 @@ Then `confirmTask(taskId)`.
 - No force-kill
 - No UI / keyboard / mouse control
 - No Sophie direct access to ApplicationService
-- Real open/close require an approved compiled native bridge (not shipped in Phase 5)
+- Phase 13: real open/close/active via optional `jarvis_macos.node` (`npm run build:native`)
+- Without the compiled addon, backends remain `UNAVAILABLE` (honest)
 
-**Do not start Phase 6** without human validation.
+See `docs/JARVIS_MACOS_NATIVE.md`.

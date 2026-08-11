@@ -1,11 +1,12 @@
 {
   "name": "sophie-jarvis",
-  "version": "0.12.0",
+  "version": "0.15.0",
   "description": "JARVIS Core — modular, permissioned tool execution foundation",
   "private": true,
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "build:native": "node-gyp rebuild",
     "jarvis": "tsx src/runtime/cli.ts",
     "smoke": "tsx tools/jarvis-core-smoke.ts",
     "smoke:observation": "tsx tools/jarvis-observation-smoke.ts",
@@ -16,6 +17,8 @@
     "audit:apps": "tsx tools/jarvis-application-control-audit.ts",
     "smoke:macos": "tsx tools/jarvis-macos-application-backend-smoke.ts",
     "audit:macos": "tsx tools/jarvis-macos-backend-audit.ts",
+    "smoke:macos-native": "tsx tools/jarvis-macos-native-smoke.ts",
+    "audit:macos-native": "tsx tools/jarvis-macos-native-audit.ts",
     "smoke:screen": "tsx tools/jarvis-screen-observation-smoke.ts",
     "audit:screen": "tsx tools/jarvis-screen-observation-audit.ts",
     "smoke:presence": "tsx tools/jarvis-user-activity-smoke.ts",
@@ -31,10 +34,16 @@
     "audit:context-security": "tsx tools/jarvis-context-security-audit.ts",
     "smoke:integration": "tsx tools/jarvis-integration-smoke.ts",
     "audit:integration": "tsx tools/jarvis-integration-security-audit.ts",
-    "test:integration-contract": "tsx tools/integration-contract-test.ts"
+    "test:integration-contract": "tsx tools/integration-contract-test.ts",
+    "smoke:security": "tsx tools/jarvis-security-smoke.ts",
+    "audit:security": "tsx tools/jarvis-security-audit.ts",
+    "smoke:security-monitor": "tsx tools/jarvis-security-monitor-smoke.ts",
+    "audit:security-monitor": "tsx tools/jarvis-security-monitor-audit.ts",
+    "sim:security-monitor": "tsx tools/jarvis-security-monitor-simulation.ts"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
+    "node-gyp": "^11.5.0",
     "tsx": "^4.19.3",
     "typescript": "^5.8.2"
   },

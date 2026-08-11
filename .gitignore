@@ -3,6 +3,10 @@ node_modules/
 dist/
 *.tsbuildinfo
 
+# Native addon build output (rebuild with npm run build:native)
+build/
+*.node
+
 # OS / IDE
 .DS_Store
 .idea/

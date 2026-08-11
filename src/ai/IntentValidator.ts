@@ -9,6 +9,7 @@ import {
   AI_LIMITS,
   JARVIS_ACTION_INTENT_TYPES,
   JARVIS_CONTEXT_INTENT_TYPES,
+  JARVIS_SECURITY_INTENT_TYPES,
   NON_ACTION_INTENT_TYPES,
 } from "./types.js";
 
@@ -151,6 +152,23 @@ export class IntentValidator {
         ok: true,
         intent: {
           type: type as (typeof JARVIS_CONTEXT_INTENT_TYPES)[number],
+          payload: {},
+        },
+      };
+    }
+
+    if ((JARVIS_SECURITY_INTENT_TYPES as readonly string[]).includes(type)) {
+      const extra = Object.keys(payload);
+      if (extra.length) {
+        return fail(
+          AI_ERROR_CODES.INVALID_INTENT,
+          `Security intents require empty payload; got: ${extra.join(",")}`,
+        );
+      }
+      return {
+        ok: true,
+        intent: {
+          type: type as (typeof JARVIS_SECURITY_INTENT_TYPES)[number],
           payload: {},
         },
       };

@@ -27,6 +27,13 @@ export type JarvisContextIntentType =
   | "screen.status"
   | "user.status";
 
+/** Read-only security assessment intents (Phase 14/15) — never become actions. */
+export type JarvisSecurityIntentType =
+  | "security.status"
+  | "security.alerts"
+  | "security.assess"
+  | "security.monitor.status";
+
 export type JarvisIntent =
   | {
       type: "file.copy";
@@ -57,6 +64,10 @@ export type JarvisIntent =
       payload: Record<string, never>;
     }
   | {
+      type: JarvisSecurityIntentType;
+      payload: Record<string, never>;
+    }
+  | {
       type: "conversation";
       payload: { replyHint?: string };
     }
@@ -84,6 +95,13 @@ export const JARVIS_CONTEXT_INTENT_TYPES: readonly JarvisContextIntentType[] = [
   "application.status",
   "screen.status",
   "user.status",
+] as const;
+
+export const JARVIS_SECURITY_INTENT_TYPES: readonly JarvisSecurityIntentType[] = [
+  "security.status",
+  "security.alerts",
+  "security.assess",
+  "security.monitor.status",
 ] as const;
 
 export const NON_ACTION_INTENT_TYPES = [
@@ -163,6 +181,10 @@ export type IntentRouterOutcome =
   | {
       kind: "context";
       intent: Extract<JarvisIntent, { type: JarvisContextIntentType }>;
+    }
+  | {
+      kind: "security";
+      intent: Extract<JarvisIntent, { type: JarvisSecurityIntentType }>;
     }
   | {
       kind: "conversation";
