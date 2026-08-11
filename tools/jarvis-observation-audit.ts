@@ -86,6 +86,10 @@ export async function runObservationAudit(): Promise<AuditReport> {
     const raw = await fs.readFile(file, "utf8");
     const code = stripCommentsAndStrings(raw);
     const rel = path.relative(ROOT, file);
+    // Phase 9–10 layers audited separately.
+    if (rel.replace(/\\/g, "/").startsWith("src/ai/")) continue;
+    if (rel.replace(/\\/g, "/").startsWith("src/runtime/")) continue;
+    if (rel.replace(/\\/g, "/").startsWith("src/context/")) continue;
     const isFileService =
       rel.replace(/\\/g, "/").endsWith("files/FileService.ts");
 

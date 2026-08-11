@@ -1,0 +1,102 @@
+JARVIS LOCAL LLM + INTENT UNDERSTANDING — PHASE 9 REPORT
+========================================================
+Generated: 2026-08-11
+Repository: sophie-jarvis
+Version: 0.9.0
+
+1. ARCHITECTURE
+---------------
+User text → IntentRouter → LLMProvider → IntentValidator
+  → ValidatedIntent → ActionPlanner (Phase 8)
+  → Risk → Permission → Confirmation → ActionExecutor
+
+LLM understands only. Never executes.
+
+2. FILES CREATED
+----------------
+src/ai/types.ts
+src/ai/LLMProvider.ts
+src/ai/MockLLMProvider.ts
+src/ai/OllamaLLMProvider.ts
+src/ai/IntentValidator.ts
+src/ai/IntentRouter.ts
+src/ai/index.ts
+src/tools/intentUnderstand.ts
+src/tools/intentPlan.ts
+src/tools/registerIntentTools.ts
+docs/JARVIS_LLM.md
+tools/jarvis-llm-smoke.ts
+tools/jarvis-llm-audit.ts
+tools/.audit-cache/jarvis-llm-phase9-report.txt (this file)
+
+3. LLM PROVIDERS
+----------------
+MockLLMProvider — deterministic, offline tests
+OllamaLLMProvider — optional local HTTP to configured URL
+  default http://127.0.0.1:11434
+  env: JARVIS_OLLAMA_URL / JARVIS_OLLAMA_MODEL / JARVIS_OLLAMA_TIMEOUT_MS
+Statuses: AVAILABLE | UNAVAILABLE | TIMEOUT | INVALID_RESPONSE | ERROR
+
+4. INTENTS AVAILABLE
+--------------------
+file.copy | file.move | file.create | file.delete
+application.open | application.close
+conversation | no_action | needs_clarification
+
+Mapped to Phase 8 ActionTypes only (no new system actions).
+
+5. VALIDATION
+-------------
+Strict schema; reject unknown fields, wrong types, forbidden keys,
+shell-like content, oversized strings, conversational prose as action.
+
+6. SECURITY
+-----------
+LLM cannot call FileService/ApplicationService/ActionExecutor/PermissionManager.
+No shell executor. No execute(command).
+fetch only in OllamaLLMProvider to configured endpoint.
+Phases 2–8 audits skip src/ai (covered by jarvis-llm-audit).
+
+7. PROMPT INJECTION
+-------------------
+Injection-like user text does not become actionable intents.
+Smoke covers ignore-previous / shell / osascript-style inputs.
+
+8. TESTS
+--------
+jarvis-llm-smoke.ts (Mock default; opt-in JARVIS_OLLAMA_SMOKE=1)
+
+9. RESULTS / REGRESSION
+-----------------------
+tsc --noEmit                              → PASS
+Phase 1 core smoke                        → 22/22 PASS
+Phase 2 observation smoke + audit         → PASS
+Phase 3 file smoke + audit                → PASS
+Phase 4 application smoke + audit         → PASS
+Phase 5 macos backend smoke + audit       → PASS
+Phase 6 screen smoke + audit              → PASS
+Phase 7 user activity smoke + audit       → PASS
+Phase 8 action smoke + audit              → PASS
+Phase 9 llm smoke                         → 35/35 PASS
+Phase 9 llm audit                         → PASS
+
+10. DEPENDENCIES
+----------------
+No new runtime dependencies. No mandatory Ollama npm package.
+
+11. LIMITATIONS
+---------------
+- Mock used unless Ollama configured and running
+- Ambiguous requests → needs_clarification (no guessing)
+- Conversation does not invent actions
+- Single understand attempt (no retry loops)
+
+12. OLLAMA AVAILABILITY
+-----------------------
+Optional. Unavailable → explicit UNAVAILABLE. Never faked.
+
+13. CONCLUSION
+--------------
+Phase 9 complete when suite green.
+Phase 10: NOT STARTED — awaiting human validation.
+STOP.

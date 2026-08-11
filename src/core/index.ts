@@ -59,6 +59,53 @@ export { createActionPlanTool } from "../tools/actionPlan.js";
 export { createActionConfirmTool } from "../tools/actionConfirm.js";
 export { createActionExecuteTool } from "../tools/actionExecute.js";
 export { createActionCancelTool } from "../tools/actionCancel.js";
+export { registerIntentTools } from "../tools/registerIntentTools.js";
+export { createIntentUnderstandTool } from "../tools/intentUnderstand.js";
+export { createIntentPlanTool } from "../tools/intentPlan.js";
+export { createContextSnapshotTool } from "../tools/contextSnapshot.js";
+
+export {
+  ContextService,
+  ContextFormatter,
+  MemoryContextAuditLog,
+} from "../context/index.js";
+export type {
+  ContextSnapshot,
+  ContextQueryKind,
+  ContextServiceResult,
+  ContextTiming,
+} from "../context/index.js";
+
+export {
+  MockLLMProvider,
+  OllamaLLMProvider,
+  IntentValidator,
+  IntentRouter,
+  toActionIntent,
+  AI_ERROR_CODES,
+  AI_LIMITS,
+  JARVIS_ACTION_INTENT_TYPES,
+  JARVIS_CONTEXT_INTENT_TYPES,
+} from "../ai/index.js";
+export type {
+  LLMProvider,
+  JarvisIntent,
+  IntentRouterOutcome,
+} from "../ai/index.js";
+
+export {
+  JarvisRuntime,
+  ConversationContext,
+  ResponseFormatter,
+  MemoryRuntimeAuditLog,
+  formatTiming,
+  RUNTIME_ERROR_CODES,
+} from "../runtime/index.js";
+export type {
+  JarvisResponse,
+  RuntimeState,
+  ProcessInputResult,
+} from "../runtime/index.js";
 
 export {
   ActionService,

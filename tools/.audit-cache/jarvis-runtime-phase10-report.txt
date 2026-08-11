@@ -1,0 +1,79 @@
+JARVIS INTERACTIVE RUNTIME — PHASE 10 REPORT
+============================================
+Generated: 2026-08-11
+Repository: sophie-jarvis
+Version: 0.10.0
+
+1. ARCHITECTURE
+---------------
+USER → JarvisRuntime → IntentRouter → LLM → Validator
+  → ActionPlanner → Risk/Permission → Confirmation → Executor
+  → ResponseFormatter → USER
+
+2. RUNTIME
+----------
+src/runtime/JarvisRuntime.ts
+src/runtime/types.ts
+src/runtime/ConversationContext.ts
+src/runtime/ResponseFormatter.ts
+src/runtime/RuntimeAudit.ts
+src/runtime/cli.ts
+src/runtime/index.ts
+src/ai/LLMHealth.ts
+
+3. CONVERSATION
+---------------
+Short-lived pending confirmation only.
+oui/non bound to Phase 8 token (taskId+actionType+payloadHash+expiry).
+New command invalidates previous pending.
+
+4. CONFIRMATION
+---------------
+States: IDLE / UNDERSTANDING / PLANNING / WAITING_CONFIRMATION / EXECUTING / COMPLETED / ERROR
+Never bare-word global authorization.
+
+5. CLI
+------
+npm run jarvis
+npm run jarvis -- --health
+npm run jarvis -- --timing
+JARVIS_LLM_PROVIDER=mock for explicit mock (tests/dev)
+
+6. OLLAMA HEALTH
+----------------
+probeLLMHealth() — real status/latency; UNAVAILABLE when down.
+
+7. PERFORMANCE
+--------------
+InteractionTiming: llmMs, planningMs, confirmationMs, executionMs, totalMs
+Reported via --timing / ProcessInputResult.timing (measured, not invented).
+
+8. TESTS
+--------
+jarvis-runtime-smoke.ts
+jarvis-runtime-security-audit.ts
+jarvis-runtime-audit.ts
+
+9. AUDITS / SECURITY
+--------------------
+Runtime forbids node:fs, child_process, exec/spawn, fetch, camera/mic APIs.
+Orchestration only.
+
+10. LIMITATIONS
+---------------
+No new system actions; no long-term memory; no shell; file allow-paths required for real FS.
+
+11. REGRESSION
+--------------
+tsc --noEmit                              → PASS
+Phase 1 core smoke                        → 22/22 PASS
+Phase 2–9 smokes + audits                 → PASS
+Phase 10 runtime smoke                    → 17/17 PASS
+Phase 10 runtime security audit           → PASS
+Phase 10 runtime audit tool               → PASS
+
+12. CONCLUSION
+--------------
+Phase 10 complete when suite green.
+Phase 11: NOT STARTED — awaiting human validation.
+STOP.

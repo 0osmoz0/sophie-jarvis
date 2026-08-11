@@ -4,7 +4,7 @@ import type { Tool } from "./Tool.js";
 import type { ToolResult } from "../core/types.js";
 
 /** Application version — kept in sync with package.json manually for Phase 1. */
-export const JARVIS_APP_VERSION = "0.8.0";
+export const JARVIS_APP_VERSION = "0.11.0";
 
 export interface SystemInfoData {
   platform: string;

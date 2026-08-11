@@ -1,11 +1,12 @@
 {
   "name": "sophie-jarvis",
-  "version": "0.8.0",
+  "version": "0.11.0",
   "description": "JARVIS Core — modular, permissioned tool execution foundation",
   "private": true,
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "jarvis": "tsx src/runtime/cli.ts",
     "smoke": "tsx tools/jarvis-core-smoke.ts",
     "smoke:observation": "tsx tools/jarvis-observation-smoke.ts",
     "audit:observation": "tsx tools/jarvis-observation-audit.ts",
@@ -20,7 +21,14 @@
     "smoke:presence": "tsx tools/jarvis-user-activity-smoke.ts",
     "audit:presence": "tsx tools/jarvis-user-activity-audit.ts",
     "smoke:actions": "tsx tools/jarvis-action-execution-smoke.ts",
-    "audit:actions": "tsx tools/jarvis-action-execution-audit.ts"
+    "audit:actions": "tsx tools/jarvis-action-execution-audit.ts",
+    "smoke:llm": "tsx tools/jarvis-llm-smoke.ts",
+    "audit:llm": "tsx tools/jarvis-llm-audit.ts",
+    "smoke:runtime": "tsx tools/jarvis-runtime-smoke.ts",
+    "audit:runtime": "tsx tools/jarvis-runtime-security-audit.ts",
+    "smoke:context": "tsx tools/jarvis-context-smoke.ts",
+    "audit:context": "tsx tools/jarvis-context-audit.ts",
+    "audit:context-security": "tsx tools/jarvis-context-security-audit.ts"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",

@@ -1,0 +1,128 @@
+JARVIS CONTEXT AWARENESS — PHASE 11 REPORT
+==========================================
+Generated: 2026-08-11
+Repository: sophie-jarvis
+Version: 0.11.0
+
+1. ARCHITECTURE
+---------------
+USER → JarvisRuntime → IntentRouter → LLM → Validator
+  ├─ ACTION INTENT → ActionPlanner → Risk/Permission → Confirmation → Executor
+  └─ CONTEXT INTENT → ContextService → ContextSnapshot → ResponseFormatter
+→ USER
+
+Principle: context informs; context never decides.
+LLM interprets; Runtime orchestrates; Brain/Policy retains action authority.
+
+2. MODULE
+---------
+src/context/types.ts
+src/context/ContextService.ts
+src/context/ContextFormatter.ts
+src/context/ContextAuditLog.ts
+src/context/index.ts
+src/tools/contextSnapshot.ts  (tool id: system.context, Risk LOW)
+
+3. DATA AVAILABLE (when services configured)
+--------------------------------------------
+system: OS / arch / CPU / memory / uptime via ObservationService
+applications: running + active via ApplicationService (honest filter running===true)
+screen: displays / window metadata / activeWindow via ScreenService
+activity / presence: aggregate idle via UserActivityService
+files: configured paths + entry count metadata via ObservationService
+
+4. DATA UNAVAILABLE / UNKNOWN (honest)
+--------------------------------------
+Without ApplicationService → applications.status = unavailable
+Without ScreenService → screen.status = unavailable
+Without UserActivityService → activity/presence = unknown
+permission_required / error when backends report them
+Never invents apps, windows, presence, battery, key content
+
+5. LLM INTENTS (READ-ONLY, empty payload)
+-----------------------------------------
+system.context
+system.status
+application.status
+screen.status
+user.status
+
+Examples (MockLLMProvider):
+"qu'est-ce qui se passe sur mon Mac ?" → system.context
+"mon ordinateur va bien ?" → system.status
+"qu'est-ce qui est ouvert ?" → application.status
+"qu'est-ce qui est affiché ?" → screen.status
+"depuis combien de temps suis-je inactif ?" → user.status
+"ferme tout" → needs_clarification (NOT context)
+
+6. RUNTIME / CLI
+----------------
+JarvisRuntime.contextService optional
+CLI wires ObservationService + ApplicationService + ScreenService + UserActivityService
+Context path never calls ActionExecutor
+
+7. TESTS
+--------
+jarvis-context-smoke.ts ............ 14/14 PASS
+jarvis-llm-smoke.ts (Phase 11 cases) PASS
+jarvis-context-audit.ts ............ PASS
+jarvis-context-security-audit.ts ... PASS
+
+8. REGRESSION (Phases 1 → 11)
+-----------------------------
+npx tsc --noEmit ................... PASS
+Phase 1 core smoke + security ...... PASS
+Phase 2 observation ................ PASS
+Phase 3 files ...................... PASS
+Phase 4 applications ............... PASS
+Phase 5 macOS backend .............. PASS
+Phase 6 screen ..................... PASS
+Phase 7 user activity .............. PASS
+Phase 8 actions .................... PASS
+Phase 9 LLM ........................ PASS
+Phase 10 runtime ................... PASS
+Phase 11 context ................... PASS
+
+9. PERFORMANCE
+--------------
+On-demand only (no permanent polling).
+Measured fields: contextSnapshotMs, systemMs, applicationMs,
+screenMs, activityMs, totalMs.
+Typical local system-only snapshot: totalMs ≈ 2 ms
+(machine-dependent; domains without services cost ~0).
+
+10. SECURITY
+------------
+No shell / child_process / exec / spawn / fork
+No osascript / UI automation
+No camera / microphone
+No arbitrary network / fetch in context module
+No automatic actions from context (CPU high ≠ kill)
+No scheduler / aggressive setInterval polling
+Audits: jarvis-context-security-audit + jarvis-context-audit
+
+11. PRIVACY
+-----------
+Audit stores domain statuses + latency only.
+No screenshots, passwords, window text, clipboard,
+keystrokes, mouse coordinates, or personal file contents.
+
+12. LIMITATIONS
+---------------
+Application list depends on registry + backend running probes.
+Screen / activity need macOS backends + permissions when live.
+Context does not include battery invention.
+Context does not plan or execute actions.
+Ollama remains optional understand-only provider.
+
+13. DOCUMENTATION
+-----------------
+docs/JARVIS_CONTEXT.md
+README updated (Phase 11 / 0.11.0)
+npm scripts: smoke:context, audit:context, audit:context-security
+
+14. REGRESSIONS
+---------------
+None observed. All Phase 1–11 suites green.
+
+END OF PHASE 11 — STOP (do not start Phase 12).

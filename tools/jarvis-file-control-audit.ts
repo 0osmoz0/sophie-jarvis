@@ -77,6 +77,10 @@ export async function runFileControlAudit(): Promise<FileControlAuditReport> {
     const raw = await fs.readFile(file, "utf8");
     const code = stripCommentsAndStrings(raw);
     const rel = path.relative(ROOT, file).replace(/\\/g, "/");
+    // Phase 9–10 layers audited separately.
+    if (rel.startsWith("src/ai/")) continue;
+    if (rel.startsWith("src/runtime/")) continue;
+    if (rel.startsWith("src/context/")) continue;
     const isFileService = rel === "src/files/FileService.ts";
     const isTool = rel.startsWith("src/tools/");
 

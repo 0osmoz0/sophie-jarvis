@@ -236,11 +236,18 @@ export class ActionExecutor {
           };
         }
         const p = plan.payload as AppOpenPayload;
-        const r = await this.applications.open({
+        let r = await this.applications.open({
           id: p.applicationId,
           confirmed: true,
           taskId: plan.taskId,
         });
+        if (!r.success) {
+          r = await this.applications.open({
+            name: p.applicationId,
+            confirmed: true,
+            taskId: plan.taskId,
+          });
+        }
         if (!r.success) {
           return {
             success: false,
@@ -261,11 +268,18 @@ export class ActionExecutor {
           };
         }
         const p = plan.payload as AppClosePayload;
-        const r = await this.applications.close({
+        let r = await this.applications.close({
           id: p.applicationId,
           confirmed: true,
           taskId: plan.taskId,
         });
+        if (!r.success) {
+          r = await this.applications.close({
+            name: p.applicationId,
+            confirmed: true,
+            taskId: plan.taskId,
+          });
+        }
         if (!r.success) {
           return {
             success: false,

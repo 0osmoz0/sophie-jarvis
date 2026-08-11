@@ -1,0 +1,198 @@
+/**
+ * Phase 9 — structured intents from LLM understanding only.
+ * Never executable by the LLM itself.
+ */
+
+export type LLMProviderStatus =
+  | "AVAILABLE"
+  | "UNAVAILABLE"
+  | "TIMEOUT"
+  | "INVALID_RESPONSE"
+  | "ERROR";
+
+/** Intent kinds that map 1:1 to ActionRegistry (Phase 8). */
+export type JarvisActionIntentType =
+  | "file.copy"
+  | "file.move"
+  | "file.create"
+  | "file.delete"
+  | "application.open"
+  | "application.close";
+
+/** Read-only context intents (Phase 11) — never become actions. */
+export type JarvisContextIntentType =
+  | "system.context"
+  | "system.status"
+  | "application.status"
+  | "screen.status"
+  | "user.status";
+
+export type JarvisIntent =
+  | {
+      type: "file.copy";
+      payload: { source: string; destination: string };
+    }
+  | {
+      type: "file.move";
+      payload: { source: string; destination: string };
+    }
+  | {
+      type: "file.create";
+      payload: { path: string; content?: string };
+    }
+  | {
+      type: "file.delete";
+      payload: { path: string };
+    }
+  | {
+      type: "application.open";
+      payload: { application: string };
+    }
+  | {
+      type: "application.close";
+      payload: { application: string };
+    }
+  | {
+      type: JarvisContextIntentType;
+      payload: Record<string, never>;
+    }
+  | {
+      type: "conversation";
+      payload: { replyHint?: string };
+    }
+  | {
+      type: "no_action";
+      payload: { reason?: string };
+    }
+  | {
+      type: "needs_clarification";
+      payload: { question: string };
+    };
+
+export const JARVIS_ACTION_INTENT_TYPES: readonly JarvisActionIntentType[] = [
+  "file.copy",
+  "file.move",
+  "file.create",
+  "file.delete",
+  "application.open",
+  "application.close",
+] as const;
+
+export const JARVIS_CONTEXT_INTENT_TYPES: readonly JarvisContextIntentType[] = [
+  "system.context",
+  "system.status",
+  "application.status",
+  "screen.status",
+  "user.status",
+] as const;
+
+export const NON_ACTION_INTENT_TYPES = [
+  "conversation",
+  "no_action",
+  "needs_clarification",
+] as const;
+
+export type NonActionIntentType = (typeof NON_ACTION_INTENT_TYPES)[number];
+
+export interface LLMUnderstandRequest {
+  text: string;
+}
+
+export interface LLMUnderstandSuccess {
+  ok: true;
+  status: "AVAILABLE";
+  /** Raw model text (for audit/debug) — never execute this. */
+  raw: string;
+  /** Parsed but not yet validated structure (may be untrusted). */
+  candidate: unknown;
+}
+
+export interface LLMUnderstandFailure {
+  ok: false;
+  status: Exclude<LLMProviderStatus, "AVAILABLE">;
+  error: string;
+  raw?: string;
+}
+
+export type LLMUnderstandResult = LLMUnderstandSuccess | LLMUnderstandFailure;
+
+export interface LLMCapabilityReport {
+  status: LLMProviderStatus;
+  reason?: string;
+  endpoint?: string | null;
+  model?: string | null;
+}
+
+export const AI_ERROR_CODES = {
+  UNAVAILABLE: "UNAVAILABLE",
+  TIMEOUT: "TIMEOUT",
+  INVALID_RESPONSE: "INVALID_RESPONSE",
+  INVALID_INTENT: "INVALID_INTENT",
+  INPUT_TOO_LONG: "INPUT_TOO_LONG",
+  OUTPUT_TOO_LONG: "OUTPUT_TOO_LONG",
+  FORBIDDEN_CONTENT: "FORBIDDEN_CONTENT",
+  UNKNOWN_ACTION: "UNKNOWN_ACTION",
+  NEEDS_CLARIFICATION: "NEEDS_CLARIFICATION",
+  NO_ACTION: "NO_ACTION",
+  ERROR: "ERROR",
+} as const;
+
+export interface IntentValidationSuccess {
+  ok: true;
+  intent: JarvisIntent;
+}
+
+export interface IntentValidationFailure {
+  ok: false;
+  code: string;
+  message: string;
+}
+
+export type IntentValidationResult =
+  | IntentValidationSuccess
+  | IntentValidationFailure;
+
+export type IntentRouterOutcome =
+  | {
+      kind: "action";
+      intent: Extract<
+        JarvisIntent,
+        { type: JarvisActionIntentType }
+      >;
+    }
+  | {
+      kind: "context";
+      intent: Extract<JarvisIntent, { type: JarvisContextIntentType }>;
+    }
+  | {
+      kind: "conversation";
+      intent: Extract<JarvisIntent, { type: "conversation" }>;
+    }
+  | {
+      kind: "no_action";
+      intent: Extract<JarvisIntent, { type: "no_action" }>;
+    }
+  | {
+      kind: "needs_clarification";
+      intent: Extract<JarvisIntent, { type: "needs_clarification" }>;
+    }
+  | {
+      kind: "rejected";
+      code: string;
+      message: string;
+      raw?: string;
+    }
+  | {
+      kind: "provider_error";
+      status: Exclude<LLMProviderStatus, "AVAILABLE">;
+      message: string;
+    };
+
+/** Limits — security before convenience. */
+export const AI_LIMITS = {
+  maxUserTextChars: 2_000,
+  maxLlmOutputChars: 4_000,
+  maxPayloadStringChars: 1_000,
+  maxRetries: 0,
+  defaultTimeoutMs: 15_000,
+} as const;

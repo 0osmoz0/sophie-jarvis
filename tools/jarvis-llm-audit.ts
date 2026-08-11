@@ -1,6 +1,6 @@
 /**
- * Phase 4 application-control security audit.
- * Lifecycle only — no shell, no UI automation, no kill, no network/camera.
+ * Phase 9 LLM / intent security audit.
+ * Scans src/ai and related tools (comments/strings stripped).
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -15,21 +15,21 @@ const FORBIDDEN = [
   { name: "fork(", pattern: /\bfork\s*\(/ },
   { name: "shell:true", pattern: /shell\s*:\s*true/ },
   { name: "osascript", pattern: /\bosascript\b/i },
-  { name: "kill(", pattern: /\b(?:process\.)?kill\s*\(/ },
-  { name: "killall", pattern: /\bkillall\b/ },
-  { name: "pkill", pattern: /\bpkill\b/ },
-  { name: "SIGKILL", pattern: /\bSIGKILL\b/ },
+  { name: "AppleScript", pattern: /\bAppleScript\b/ },
+  { name: "eval(", pattern: /\beval\s*\(/ },
+  { name: "Function(", pattern: /\bFunction\s*\(/ },
+  { name: "new Function", pattern: /\bnew\s+Function\b/ },
   { name: "robotjs", pattern: /\brobotjs\b/i },
   { name: "nut.js", pattern: /\b(@nut-tree|nut\.js)\b/i },
   { name: "CGEvent", pattern: /\bCGEvent\b/ },
-  { name: "AXUIElement", pattern: /\bAXUIElement\b/ },
-  { name: "clipboard automation", pattern: /\bclipboard\.(write|read)\b/i },
-  { name: "fetch(", pattern: /\bfetch\s*\(/ },
   { name: "getUserMedia", pattern: /\bgetUserMedia\b/ },
-  { name: "getDisplayMedia", pattern: /\bgetDisplayMedia\b/ },
-  { name: "MediaRecorder", pattern: /\bMediaRecorder\b/ },
-  { name: "eval(", pattern: /\beval\s*\(/ },
+  { name: "execute(command)", pattern: /\bexecute\s*\(\s*command\b/i },
+  { name: "runCommand", pattern: /\brunCommand\b/ },
+  { name: "shellCommand", pattern: /\bshellCommand\b/ },
 ] as const;
+
+/** fetch is only allowed in OllamaLLMProvider (configured endpoint). */
+const FETCH_ALLOWED = "src/ai/OllamaLLMProvider.ts";
 
 function stripCommentsAndStrings(source: string): string {
   let out = source.replace(/\/\*[\s\S]*?\*\//g, " ");
@@ -60,15 +60,20 @@ async function walkTs(dir: string): Promise<string[]> {
   return out;
 }
 
-export interface ApplicationControlAuditReport {
+export interface LlmAuditReport {
   ok: boolean;
   scannedFiles: number;
   failures: string[];
   notes: string[];
 }
 
-export async function runApplicationControlAudit(): Promise<ApplicationControlAuditReport> {
-  const files = await walkTs(path.join(ROOT, "src"));
+export async function runLlmAudit(): Promise<LlmAuditReport> {
+  const files = [
+    ...(await walkTs(path.join(ROOT, "src/ai"))),
+    ...(await walkTs(path.join(ROOT, "src/tools"))).filter((f) =>
+      /intent/i.test(path.basename(f)),
+    ),
+  ];
   const failures: string[] = [];
   const notes: string[] = [];
 
@@ -76,21 +81,24 @@ export async function runApplicationControlAudit(): Promise<ApplicationControlAu
     const raw = await fs.readFile(file, "utf8");
     const code = stripCommentsAndStrings(raw);
     const rel = path.relative(ROOT, file).replace(/\\/g, "/");
-    // Phase 9–10 layers audited separately.
-    if (rel.startsWith("src/ai/")) continue;
-    if (rel.startsWith("src/runtime/")) continue;
-    if (rel.startsWith("src/context/")) continue;
-
     for (const { name, pattern } of FORBIDDEN) {
       if (pattern.test(code)) {
         failures.push(`${rel}: forbidden pattern "${name}"`);
       }
     }
-
-    // Tools must not import child_process or call ApplicationService internals via fs
-    if (rel.startsWith("src/tools/application") && /from\s+["']node:child_process["']/.test(code)) {
-      failures.push(`${rel}: application tools must not import child_process`);
+    if (/\bfetch\s*\(/.test(code) && rel !== FETCH_ALLOWED) {
+      failures.push(`${rel}: fetch only allowed in ${FETCH_ALLOWED}`);
     }
+  }
+
+  // Ollama provider must not hardcode non-loopback cloud hosts as default.
+  const ollamaPath = path.join(ROOT, "src/ai/OllamaLLMProvider.ts");
+  const ollamaSrc = await fs.readFile(ollamaPath, "utf8");
+  if (!ollamaSrc.includes("127.0.0.1:11434")) {
+    failures.push("OllamaLLMProvider: default loopback URL missing");
+  }
+  if (/api\.openai\.com|anthropic\.com|googleapis\.com/i.test(ollamaSrc)) {
+    failures.push("OllamaLLMProvider: cloud LLM host detected");
   }
 
   const pkg = JSON.parse(
@@ -100,18 +108,9 @@ export async function runApplicationControlAudit(): Promise<ApplicationControlAu
     failures.push("package.json: runtime dependencies must remain empty");
   }
 
-  const forbiddenDeps = ["robotjs", "@nut-tree/nut-js", "nut.js", "node-window-manager"];
-  // Check package.json text
-  const pkgText = await fs.readFile(path.join(ROOT, "package.json"), "utf8");
-  for (const dep of forbiddenDeps) {
-    if (pkgText.includes(`"${dep}"`)) {
-      failures.push(`package.json: forbidden dependency ${dep}`);
-    }
-  }
-
-  notes.push("Phase 4 is application lifecycle only (list/info/active/open/close).");
-  notes.push("No UI automation, shell, kill, network, camera, or microphone.");
-  notes.push("Default ApplicationService open/close return UNAVAILABLE without native backend.");
+  notes.push("Phase 9: LLM understands only — never executes.");
+  notes.push("fetch allowed solely in OllamaLLMProvider for configured URL.");
+  notes.push("No mandatory Ollama package dependency.");
 
   return {
     ok: failures.length === 0,
@@ -126,13 +125,13 @@ const isDirect =
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isDirect) {
-  runApplicationControlAudit().then((report) => {
-    console.log(`Application-control audit — scanned ${report.scannedFiles} source files`);
+  runLlmAudit().then((report) => {
+    console.log(`LLM audit — scanned ${report.scannedFiles} files`);
     for (const n of report.notes) console.log(`  note: ${n}`);
     if (report.ok) {
-      console.log("Application-control audit PASSED.");
+      console.log("LLM audit PASSED.");
     } else {
-      console.error("Application-control audit FAILED:");
+      console.error("LLM audit FAILED:");
       for (const f of report.failures) console.error(`  - ${f}`);
       process.exitCode = 1;
     }
