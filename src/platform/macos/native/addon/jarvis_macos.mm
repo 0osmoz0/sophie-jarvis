@@ -487,6 +487,167 @@ static NSData* EncodePNG(CGImageRef image) {
   return data;
 }
 
+static napi_value GetMouseLocation(napi_env env, napi_callback_info info) {
+  (void)info;
+  @autoreleasepool {
+    NSPoint loc = [NSEvent mouseLocation];
+    napi_value obj, x, y, space;
+    napi_create_object(env, &obj);
+    napi_create_double(env, (double)loc.x, &x);
+    napi_create_double(env, (double)loc.y, &y);
+    napi_create_string_utf8(
+        env, "cocoa-global-bottom-left", NAPI_AUTO_LENGTH, &space);
+    napi_set_named_property(env, obj, "x", x);
+    napi_set_named_property(env, obj, "y", y);
+    napi_set_named_property(env, obj, "coordinateSpace", space);
+    return obj;
+  }
+}
+
+static void SetWindowFieldFromAXString(
+    napi_env env,
+    napi_value obj,
+    const char* key,
+    CFStringRef attr,
+    AXUIElementRef el) {
+  CFTypeRef value = NULL;
+  if (AXUIElementCopyAttributeValue(el, attr, &value) != kAXErrorSuccess ||
+      !value) {
+    napi_value n;
+    napi_get_null(env, &n);
+    napi_set_named_property(env, obj, key, n);
+    return;
+  }
+  if (CFGetTypeID(value) == CFStringGetTypeID()) {
+    napi_value s;
+    napi_create_string_utf8(
+        env, [(__bridge NSString*)value UTF8String], NAPI_AUTO_LENGTH, &s);
+    napi_set_named_property(env, obj, key, s);
+  } else {
+    napi_value n;
+    napi_get_null(env, &n);
+    napi_set_named_property(env, obj, key, n);
+  }
+  CFRelease(value);
+}
+
+static napi_value GetFocusedWindowInfo(napi_env env, napi_callback_info info) {
+  (void)info;
+  @autoreleasepool {
+    napi_value result;
+    napi_create_object(env, &result);
+
+    NSRunningApplication* front =
+        [NSWorkspace sharedWorkspace].frontmostApplication;
+    if (!front) {
+      napi_value ok, code;
+      napi_get_boolean(env, false, &ok);
+      napi_create_string_utf8(env, "UNAVAILABLE", NAPI_AUTO_LENGTH, &code);
+      napi_set_named_property(env, result, "ok", ok);
+      napi_set_named_property(env, result, "code", code);
+      return result;
+    }
+
+    pid_t pid = front.processIdentifier;
+    AXUIElementRef app = AXUIElementCreateApplication(pid);
+    if (!app) {
+      napi_value ok, code;
+      napi_get_boolean(env, false, &ok);
+      napi_create_string_utf8(env, "UNAVAILABLE", NAPI_AUTO_LENGTH, &code);
+      napi_set_named_property(env, result, "ok", ok);
+      napi_set_named_property(env, result, "code", code);
+      return result;
+    }
+
+    CFTypeRef windowRef = NULL;
+    AXError err =
+        AXUIElementCopyAttributeValue(app, kAXFocusedWindowAttribute, &windowRef);
+    CFRelease(app);
+
+    if (err == kAXErrorAPIDisabled || err == kAXErrorNotAuthorized) {
+      napi_value ok, code;
+      napi_get_boolean(env, false, &ok);
+      napi_create_string_utf8(
+          env, "PERMISSION_REQUIRED", NAPI_AUTO_LENGTH, &code);
+      napi_set_named_property(env, result, "ok", ok);
+      napi_set_named_property(env, result, "code", code);
+      return result;
+    }
+
+    if (err != kAXErrorSuccess || !windowRef) {
+      napi_value ok, code;
+      napi_get_boolean(env, false, &ok);
+      napi_create_string_utf8(env, "UNAVAILABLE", NAPI_AUTO_LENGTH, &code);
+      napi_set_named_property(env, result, "ok", ok);
+      napi_set_named_property(env, result, "code", code);
+      return result;
+    }
+
+    AXUIElementRef window = (AXUIElementRef)windowRef;
+    napi_value ok, windowObj, appName, bundleId;
+    napi_get_boolean(env, true, &ok);
+    napi_set_named_property(env, result, "ok", ok);
+    napi_create_object(env, &windowObj);
+
+    NSString* name = front.localizedName ?: front.bundleIdentifier;
+    if (name) {
+      napi_create_string_utf8(env, name.UTF8String, NAPI_AUTO_LENGTH, &appName);
+    } else {
+      napi_get_null(env, &appName);
+    }
+    napi_set_named_property(env, windowObj, "applicationName", appName);
+
+    if (front.bundleIdentifier) {
+      napi_create_string_utf8(
+          env, front.bundleIdentifier.UTF8String, NAPI_AUTO_LENGTH, &bundleId);
+    } else {
+      napi_get_null(env, &bundleId);
+    }
+    napi_set_named_property(env, windowObj, "bundleId", bundleId);
+
+    SetWindowFieldFromAXString(
+        env, windowObj, "title", kAXTitleAttribute, window);
+    SetWindowFieldFromAXString(
+        env, windowObj, "role", kAXRoleAttribute, window);
+
+    napi_value boundsObj;
+    napi_create_object(env, &boundsObj);
+    CFTypeRef posRef = NULL;
+    CFTypeRef sizeRef = NULL;
+    if (AXUIElementCopyAttributeValue(window, kAXPositionAttribute, &posRef) ==
+            kAXErrorSuccess &&
+        posRef &&
+        AXUIElementCopyAttributeValue(window, kAXSizeAttribute, &sizeRef) ==
+            kAXErrorSuccess &&
+        sizeRef) {
+      CGPoint pos = CGPointZero;
+      CGSize size = CGSizeZero;
+      AXValueGetValue((AXValueRef)posRef, (AXValueType)kAXValueCGPointType, &pos);
+      AXValueGetValue((AXValueRef)sizeRef, (AXValueType)kAXValueCGSizeType, &size);
+      napi_value bx, by, bw, bh;
+      napi_create_double(env, pos.x, &bx);
+      napi_create_double(env, pos.y, &by);
+      napi_create_double(env, size.width, &bw);
+      napi_create_double(env, size.height, &bh);
+      napi_set_named_property(env, boundsObj, "x", bx);
+      napi_set_named_property(env, boundsObj, "y", by);
+      napi_set_named_property(env, boundsObj, "width", bw);
+      napi_set_named_property(env, boundsObj, "height", bh);
+      napi_set_named_property(env, windowObj, "bounds", boundsObj);
+    } else {
+      napi_value n;
+      napi_get_null(env, &n);
+      napi_set_named_property(env, windowObj, "bounds", n);
+    }
+    if (posRef) CFRelease(posRef);
+    if (sizeRef) CFRelease(sizeRef);
+
+    napi_set_named_property(env, result, "window", windowObj);
+    CFRelease(windowRef);
+    return result;
+  }
+}
+
 static napi_value CaptureDisplay(napi_env env, napi_callback_info info) {
   size_t argc = 1;
   napi_value args[1];
@@ -494,8 +655,6 @@ static napi_value CaptureDisplay(napi_env env, napi_callback_info info) {
 
   @autoreleasepool {
     CGDirectDisplayID displayId = CGMainDisplayID();
-    // Optional display index via "display-N" id ignored for primary capture;
-    // capture main display only in Phase 13 (honest scope).
     (void)argc;
     (void)args;
 
@@ -561,6 +720,8 @@ static napi_value Init(napi_env env, napi_value exports) {
       {"getWindows", GetWindows},
       {"getActiveWindow", GetActiveWindow},
       {"getSessionInfo", GetSessionInfo},
+      {"getMouseLocation", GetMouseLocation},
+      {"getFocusedWindowInfo", GetFocusedWindowInfo},
       {"captureDisplay", CaptureDisplay},
   };
   for (size_t i = 0; i < sizeof(fns) / sizeof(fns[0]); i++) {

@@ -40,6 +40,12 @@ export class MockApplicationBackend implements ApplicationBackend {
     }
   }
 
+  /** Test helper — set frontmost without opening. */
+  setActive(id: string | null): void {
+    this.activeKey = id;
+    if (id) this.running.add(id);
+  }
+
   private keyOf(identity: BackendApplicationIdentity): string | null {
     if (identity.id) return identity.id;
     if (identity.bundleId) {

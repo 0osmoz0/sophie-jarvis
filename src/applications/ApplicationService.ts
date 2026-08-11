@@ -71,6 +71,45 @@ export class ApplicationService {
       });
     }
 
+    // Phase 24 — prefer backend observation (NSWorkspace / mock catalog)
+    // over registry-only iteration so Context sees real running apps.
+    const cap = this.backend.getCapabilityStatus("listApplications");
+    if (cap.status === "AVAILABLE") {
+      const native = await this.backend.listApplications();
+      if (native.success) {
+        const byBundle = new Map(
+          this.registry.list().map((r) => [r.bundleId ?? "", r] as const),
+        );
+        const apps = native.data.applications.map((a) => {
+          const reg =
+            (a.bundleId && byBundle.get(a.bundleId)) ||
+            this.registry.list().find(
+              (r) =>
+                r.name.toLowerCase() === (a.name ?? "").toLowerCase(),
+            );
+          return {
+            id: reg?.id ?? a.id ?? null,
+            name: a.name,
+            bundleId: a.bundleId ?? reg?.bundleId ?? null,
+            path: a.path ?? reg?.path ?? null,
+            running: a.running ?? true,
+            active: a.active ?? null,
+          };
+        });
+        this.record({
+          action: "list",
+          toolId: "application.list",
+          application: null,
+          bundleId: null,
+          riskLevel: RiskLevel.LOW,
+          confirmation: false,
+          result: "success",
+          capability: "listApplications",
+        });
+        return { success: true, data: { applications: apps } };
+      }
+    }
+
     const apps: ApplicationInfo[] = [];
     for (const reg of this.registry.list()) {
       const runningResult = await this.backend.isApplicationRunning({

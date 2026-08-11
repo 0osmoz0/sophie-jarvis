@@ -1772,6 +1772,135 @@ const ALLOWLIST: Array<{ fileSubstring: string; patternNames: string[] }> = [
     ],
   },
   {
+    fileSubstring: "jarvis-environment-preaudit.ts",
+    patternNames: ["microphone", "fs writeFile", "camera access"],
+  },
+  {
+    fileSubstring: "jarvis-environment-smoke.ts",
+    patternNames: [
+      "microphone",
+      "camera access",
+      "child_process",
+      "fetch to external",
+      "ollama",
+    ],
+  },
+  {
+    fileSubstring: "jarvis-environment-audit.ts",
+    patternNames: ["microphone", "camera access", "fs writeFile"],
+  },
+  {
+    fileSubstring: "jarvis-environment-security-audit.ts",
+    patternNames: [
+      "child_process",
+      "exec(",
+      "spawn(",
+      "fork(",
+      "shell:true",
+      "microphone",
+      "camera access",
+      "ActionExecutor",
+      "PermissionManager",
+      "Robot / nut.js keyboard",
+      "Sophie repo import",
+    ],
+  },
+  {
+    fileSubstring: "jarvis-environment-privacy-audit.ts",
+    patternNames: [
+      "microphone",
+      "camera access",
+      "getUserMedia",
+      "MediaRecorder",
+    ],
+  },
+  {
+    fileSubstring: "jarvis-environment-simulation.ts",
+    patternNames: ["microphone", "camera access", "fetch to external"],
+  },
+  {
+    fileSubstring: "JARVIS_ENVIRONMENT.md",
+    patternNames: [
+      "microphone",
+      "camera access",
+      "child_process",
+      "shell:true",
+      "BehaviorBrain",
+      "ollama",
+      "ActionExecutor",
+      "PermissionManager",
+    ],
+  },
+  {
+    fileSubstring: "EnvironmentContext.ts",
+    patternNames: ["microphone"],
+  },
+  {
+    fileSubstring: "EnvironmentSimulator.ts",
+    patternNames: ["microphone"],
+  },
+  {
+    fileSubstring: "ContextService.ts",
+    patternNames: ["microphone", "setInterval"],
+  },
+  {
+    fileSubstring: "jarvis-cursor-preaudit.ts",
+    patternNames: ["microphone", "fs writeFile", "AXUIElement"],
+  },
+  {
+    fileSubstring: "jarvis-cursor-smoke.ts",
+    patternNames: ["microphone", "camera access", "child_process", "fetch to external"],
+  },
+  {
+    fileSubstring: "jarvis-cursor-audit.ts",
+    patternNames: ["microphone", "camera access"],
+  },
+  {
+    fileSubstring: "jarvis-cursor-security-audit.ts",
+    patternNames: [
+      "child_process",
+      "exec(",
+      "spawn(",
+      "microphone",
+      "camera access",
+      "ActionExecutor",
+      "PermissionManager",
+      "BehaviorBrain",
+    ],
+  },
+  {
+    fileSubstring: "jarvis-cursor-privacy-audit.ts",
+    patternNames: ["microphone", "camera access"],
+  },
+  {
+    fileSubstring: "jarvis-cursor-simulation.ts",
+    patternNames: ["microphone", "camera access", "fetch to external"],
+  },
+  {
+    fileSubstring: "jarvis-environment-performance.ts",
+    patternNames: ["microphone", "camera access", "fetch to external"],
+  },
+  {
+    fileSubstring: "JARVIS_CURSOR.md",
+    patternNames: [
+      "microphone",
+      "camera access",
+      "child_process",
+      "BehaviorBrain",
+      "ActionExecutor",
+      "PermissionManager",
+      "AXUIElement",
+    ],
+  },
+  {
+    fileSubstring: "CursorContext.ts",
+    patternNames: ["microphone"],
+  },
+  {
+    fileSubstring: "MacOSFocusReader.ts",
+    patternNames: ["microphone", "AXUIElement"],
+  },
+  {
     fileSubstring: "LLMRetryPolicy.ts",
     patternNames: ["ollama"],
   },

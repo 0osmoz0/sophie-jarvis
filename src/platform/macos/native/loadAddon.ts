@@ -64,6 +64,26 @@ export interface JarvisMacosNativeAddon {
     active?: boolean | null;
   } | null;
   getSessionInfo(): { locked: boolean | null; userPresent: boolean | null };
+  getMouseLocation(): {
+    x: number;
+    y: number;
+    coordinateSpace: string;
+  };
+  getFocusedWindowInfo():
+    | {
+        ok: true;
+        window: {
+          title?: string | null;
+          applicationName?: string | null;
+          bundleId?: string | null;
+          bounds?: { x: number; y: number; width: number; height: number } | null;
+          role?: string | null;
+        };
+      }
+    | {
+        ok: false;
+        code: string;
+      };
   captureDisplay(displayId?: string | null): {
     format: "png";
     width: number;

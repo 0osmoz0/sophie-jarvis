@@ -15,6 +15,34 @@ import type {
   DomainStatus,
 } from "./types.js";
 import { MemoryContextAuditLog } from "./ContextAuditLog.js";
+import {
+  classifyActivityLevel,
+  computeFreshness,
+  emptyEnvironment,
+  unionBounds,
+  type EnvironmentSnapshotResult,
+  type EnvironmentTiming,
+  type EnvAvailability,
+  type EnvDisplay,
+  type PermissionReportState,
+  ENVIRONMENT_LIMITS,
+} from "./EnvironmentContext.js";
+import { EnvironmentChangeTracker } from "./EnvironmentChangeTracker.js";
+import {
+  computeCursorMotion,
+  CursorProximityPolicy,
+  emptyCursorContext,
+  mapMouseToDisplay,
+} from "./CursorContext.js";
+import { CursorMotionTracker } from "./CursorMotionTracker.js";
+import {
+  compareFocusWindows,
+  emptyFocusedWindowContext,
+} from "./FocusedWindowContext.js";
+import { emptyAudioContext } from "./AudioContext.js";
+import type { CursorReader, FocusReader } from "./EnvironmentObservation.js";
+import { MacOSCursorReader, UnavailableCursorReader } from "../platform/macos/MacOSCursorReader.js";
+import { MacOSFocusReader, UnavailableFocusReader } from "../platform/macos/MacOSFocusReader.js";
 
 export interface ContextServiceOptions {
   observation?: ObservationService;
@@ -22,15 +50,18 @@ export interface ContextServiceOptions {
   screen?: ScreenService;
   activity?: UserActivityService;
   audit?: ContextAuditSink;
-  /** Optional Phase 12 ephemeral Sophie signals (read-only merge). */
   sophieSignals?: () => ContextSophieSignals | undefined;
-  /** Optional Phase 16 relevant memories only (never full dump). */
   memoryRelevant?: () => ContextMemoryInfo | Promise<ContextMemoryInfo>;
+  environmentChanges?: EnvironmentChangeTracker;
+  cursorReader?: CursorReader;
+  focusReader?: FocusReader;
+  cursorPolicy?: CursorProximityPolicy;
+  cursorMotion?: CursorMotionTracker;
 }
 
 /**
  * ContextService — read-only façade over existing observation services.
- * Never invents values. Never triggers actions.
+ * Never invents values. Never triggers actions. No permanent polling.
  */
 export class ContextService {
   private readonly observation: ObservationService | undefined;
@@ -42,6 +73,11 @@ export class ContextService {
   private readonly memoryRelevant:
     | (() => ContextMemoryInfo | Promise<ContextMemoryInfo>)
     | undefined;
+  private readonly environmentChanges: EnvironmentChangeTracker;
+  private readonly cursorReader: CursorReader;
+  private readonly focusReader: FocusReader;
+  private readonly cursorPolicy: CursorProximityPolicy;
+  private readonly cursorMotion: CursorMotionTracker;
 
   constructor(options: ContextServiceOptions = {}) {
     this.observation = options.observation;
@@ -51,7 +87,402 @@ export class ContextService {
     this.audit = options.audit ?? new MemoryContextAuditLog();
     this.sophieSignals = options.sophieSignals;
     this.memoryRelevant = options.memoryRelevant;
+    this.environmentChanges =
+      options.environmentChanges ?? new EnvironmentChangeTracker();
+    this.cursorReader =
+      options.cursorReader ??
+      (process.platform === "darwin"
+        ? new MacOSCursorReader()
+        : new UnavailableCursorReader("Not darwin"));
+    this.focusReader =
+      options.focusReader ??
+      (process.platform === "darwin"
+        ? new MacOSFocusReader()
+        : new UnavailableFocusReader());
+    this.cursorPolicy = options.cursorPolicy ?? new CursorProximityPolicy();
+    this.cursorMotion = options.cursorMotion ?? new CursorMotionTracker();
   }
+
+  getEnvironmentChangeHistory() {
+    return this.environmentChanges.list();
+  }
+
+  /**
+   * Phase 24 — coherent EnvironmentContext snapshot (on-demand).
+   * Observation + normalize + expose only. Never decides / acts.
+   */
+  async getEnvironmentSnapshot(): Promise<EnvironmentSnapshotResult> {
+    const totalStart = Date.now();
+    const now = totalStart;
+    const timing: EnvironmentTiming = {
+      screenMs: null,
+      applicationMs: null,
+      windowMs: null,
+      activityMs: null,
+      sessionMs: null,
+      cursorMs: null,
+      focusMs: null,
+      axMs: null,
+      audioMs: null,
+      aggregationMs: null,
+      totalContextMs: 0,
+    };
+
+    const env = emptyEnvironment(now);
+    const aggStart = Date.now();
+
+    // --- Screen + window + session (same ScreenService, timed separately) ---
+    if (this.screen) {
+      const tScreen = Date.now();
+      const info = await this.screen.info();
+      timing.screenMs = Date.now() - tScreen;
+      if (info.success) {
+        const displays: EnvDisplay[] = info.data.screens.map((s) => ({
+          id: s.id,
+          width: s.width ?? null,
+          height: s.height ?? null,
+          scaleFactor: s.scaleFactor ?? null,
+          isPrimary: s.isPrimary ?? null,
+          bounds: s.bounds
+            ? {
+                x: s.bounds.x,
+                y: s.bounds.y,
+                width: s.bounds.width,
+                height: s.bounds.height,
+              }
+            : null,
+        }));
+        const primary =
+          displays.find((d) => d.isPrimary === true) ?? displays[0] ?? null;
+        env.screen = {
+          available: "AVAILABLE",
+          observedAt: now,
+          source: this.screen.backend.name,
+          displays,
+          primaryDisplay: primary,
+          width: primary?.width ?? null,
+          height: primary?.height ?? null,
+          scaleFactor: primary?.scaleFactor ?? null,
+          displayCount: displays.length,
+          globalBounds: unionBounds(displays),
+          reason: null,
+        };
+      } else {
+        env.screen = {
+          ...env.screen,
+          available: mapEnvAvail(info.error.code),
+          observedAt: now,
+          source: this.screen.backend.name,
+          reason: info.error.message,
+        };
+      }
+
+      const tWin = Date.now();
+      const win = await this.screen.windows();
+      const active = await this.screen.activeWindow();
+      timing.windowMs = Date.now() - tWin;
+      if (active.success) {
+        const w = active.data.window;
+        env.window = {
+          available: "AVAILABLE",
+          observedAt: now,
+          source: this.screen.backend.name,
+          active: w
+            ? {
+                id: w.id ?? null,
+                title: w.title ?? null,
+                applicationName:
+                  w.applicationName ?? active.data.application ?? null,
+                bundleId: w.bundleId ?? null,
+                bounds: w.bounds
+                  ? {
+                      x: w.bounds.x,
+                      y: w.bounds.y,
+                      width: w.bounds.width,
+                      height: w.bounds.height,
+                    }
+                  : null,
+              }
+            : null,
+          titleAvailable: !!w?.title,
+          boundsAvailable: !!w?.bounds,
+          reason: win.success ? null : `windows list: ${win.error.code}`,
+        };
+      } else {
+        env.window = {
+          ...env.window,
+          available: mapEnvAvail(active.error.code),
+          observedAt: now,
+          source: this.screen.backend.name,
+          reason: active.error.message,
+        };
+      }
+
+      const tSess = Date.now();
+      const sess = await this.screen.session();
+      timing.sessionMs = Date.now() - tSess;
+      if (sess.success) {
+        const locked = sess.data.locked;
+        const userPresent = sess.data.userPresent;
+        const hasAny = locked != null || userPresent != null;
+        env.session = {
+          available: hasAny ? "AVAILABLE" : "UNKNOWN",
+          observedAt: now,
+          source: this.screen.backend.name,
+          locked,
+          userPresent,
+          reason: hasAny
+            ? null
+            : "Session keys absent — UNKNOWN (not coerced to false)",
+        };
+      } else {
+        env.session = {
+          available: mapEnvAvail(sess.error.code),
+          observedAt: now,
+          source: this.screen.backend.name,
+          locked: null,
+          userPresent: null,
+          reason: sess.error.message,
+        };
+      }
+    }
+
+    // --- Applications ---
+    if (this.applications) {
+      const t0 = Date.now();
+      const list = await this.applications.list();
+      const active = await this.applications.active();
+      timing.applicationMs = Date.now() - t0;
+      if (list.success) {
+        const running = list.data.applications.filter((a) => a.running === true);
+        env.application = {
+          available: "AVAILABLE",
+          observedAt: now,
+          source: this.applications.backend.name,
+          active:
+            active.success && active.data
+              ? {
+                  id: active.data.id ?? null,
+                  name: active.data.name ?? null,
+                  bundleId: active.data.bundleId ?? null,
+                }
+              : null,
+          runningCount: running.length,
+          recentApplications: running
+            .slice(0, ENVIRONMENT_LIMITS.maxRecentApplications)
+            .map((a) => ({
+              id: a.id ?? null,
+              name: a.name ?? null,
+              bundleId: a.bundleId ?? null,
+            })),
+          reason:
+            active.success
+              ? null
+              : `active: ${active.success === false ? active.error.code : "null"}`,
+        };
+      } else {
+        env.application = {
+          ...env.application,
+          available: mapEnvAvail(list.error.code),
+          observedAt: now,
+          source: this.applications.backend.name,
+          reason: list.error.message,
+        };
+      }
+    }
+
+    // --- User activity ---
+    if (this.activity) {
+      const t0 = Date.now();
+      const act = await this.activity.getActivity();
+      timing.activityMs = Date.now() - t0;
+      if (act.success) {
+        const idle = act.data.idleSeconds ?? null;
+        const level = classifyActivityLevel(idle);
+        const unknown =
+          act.data.status === "UNKNOWN" || act.data.source === "unavailable";
+        env.userActivity = {
+          available: unknown ? "UNKNOWN" : "AVAILABLE",
+          observedAt: now,
+          source: "UserActivityService",
+          idleSeconds: idle,
+          activityLevel: unknown ? "UNKNOWN" : level,
+          reason: unknown
+            ? "Activity observation unavailable — IDLE ≠ ABSENT"
+            : "IDLE ≠ ABSENT (software signal only)",
+        };
+      } else {
+        env.userActivity = {
+          available: "UNKNOWN",
+          observedAt: now,
+          source: "UserActivityService",
+          idleSeconds: null,
+          activityLevel: "UNKNOWN",
+          reason: act.error.message,
+        };
+      }
+    }
+
+    // --- Focused window (AX) + heuristic compare ---
+    const heuristicRef = env.window.active;
+    const tFocus = Date.now();
+    let axStatus: EnvAvailability = "UNAVAILABLE";
+    let axWindow = null as ReturnType<MacOSFocusReader["readWithStatus"]>["window"];
+    if (this.focusReader instanceof MacOSFocusReader) {
+      const ax = this.focusReader.readWithStatus();
+      timing.axMs = Date.now() - tFocus;
+      axStatus = ax.status;
+      axWindow = ax.window;
+      env.focusedWindow = {
+        available: ax.status === "AVAILABLE" ? "AVAILABLE" : ax.status,
+        observedAt: now,
+        source: ax.status === "AVAILABLE" ? "accessibility" : "none",
+        accessibilityAvailable: ax.status === "AVAILABLE" ? true : ax.status === "PERMISSION_REQUIRED" ? false : null,
+        focused: axWindow
+          ? {
+              id: axWindow.id,
+              title: axWindow.title,
+              applicationName: axWindow.applicationName,
+              bundleId: axWindow.bundleId,
+              bounds: axWindow.bounds,
+            }
+          : null,
+        heuristic: heuristicRef,
+        matchesHeuristic: compareFocusWindows(
+          axWindow
+            ? {
+                id: axWindow.id,
+                title: axWindow.title,
+                applicationName: axWindow.applicationName,
+                bundleId: axWindow.bundleId,
+                bounds: axWindow.bounds,
+              }
+            : null,
+          heuristicRef,
+        ),
+        titleAvailable: !!(axWindow?.title ?? heuristicRef?.title),
+        boundsAvailable: !!(axWindow?.bounds ?? heuristicRef?.bounds),
+        reason: ax.reason ?? null,
+      };
+    } else {
+      const cap = this.focusReader.getCapability();
+      env.focusedWindow = {
+        ...emptyFocusedWindowContext(),
+        available: cap.status,
+        observedAt: now,
+        source: this.focusReader.name.includes("mock") ? "accessibility" : "none",
+        heuristic: heuristicRef,
+        titleAvailable: !!heuristicRef?.title,
+        boundsAvailable: !!heuristicRef?.bounds,
+        reason: cap.reason ?? null,
+      };
+      const fw = this.focusReader.read();
+      if (fw) {
+        env.focusedWindow.available = "AVAILABLE";
+        env.focusedWindow.focused = {
+          id: fw.id,
+          title: fw.title,
+          applicationName: fw.applicationName,
+          bundleId: fw.bundleId,
+          bounds: fw.bounds,
+        };
+        env.focusedWindow.matchesHeuristic = compareFocusWindows(
+          env.focusedWindow.focused,
+          heuristicRef,
+        );
+      }
+      timing.focusMs = Date.now() - tFocus;
+    }
+
+    // --- Cursor (on-demand read + motion from prior sample) ---
+    const tCursor = Date.now();
+    const cursorCap = this.cursorReader.getCapability();
+    const read = this.cursorReader.read();
+    timing.cursorMs = Date.now() - tCursor;
+    if (cursorCap.status === "AVAILABLE" && read) {
+      const sample = { x: read.x, y: read.y, observedAt: now };
+      const prev = this.cursorMotion.record(sample);
+      const motion = computeCursorMotion(sample, prev, this.cursorPolicy);
+      this.cursorMotion.updateProximity(motion.nearby);
+      const ageMs = 0;
+      env.cursor = {
+        available: "AVAILABLE",
+        observedAt: now,
+        source: this.cursorReader.name,
+        coordinateSpace: read.coordinateSpace,
+        x: read.x,
+        y: read.y,
+        displayId: mapMouseToDisplay(env.screen.displays, read.x, read.y),
+        moving: motion.moving,
+        velocity: motion.velocity,
+        direction: motion.direction,
+        distanceToSophie: motion.distanceToSophie,
+        nearby: motion.nearby,
+        approaching: motion.approaching,
+        leaving: motion.leaving,
+        ageMs,
+        freshness: computeFreshness(now, now),
+        reason: null,
+      };
+    } else {
+      env.cursor = {
+        ...emptyCursorContext(now),
+        available: cursorCap.status,
+        source: this.cursorReader.name,
+        reason: cursorCap.reason ?? "Cursor read failed",
+      };
+    }
+
+    // --- Audio: Now Playing remains UNAVAILABLE (Phase 25 audit) ---
+    timing.audioMs = 0;
+    env.audio = emptyAudioContext(now);
+
+    // --- Permissions (report only — never request TCC) ---
+    const axPerm =
+      this.focusReader instanceof MacOSFocusReader
+        ? mapPerm(
+            env.focusedWindow.available === "PERMISSION_REQUIRED"
+              ? "PERMISSION_REQUIRED"
+              : env.focusedWindow.available === "AVAILABLE"
+                ? "AVAILABLE"
+                : "UNAVAILABLE",
+          )
+        : mapPerm(this.focusReader.getCapability().status);
+    env.permissions = {
+      accessibility: axPerm,
+      screenRecording: mapPerm(
+        this.screen
+          ? this.screen.backend.getCapabilityStatus("windows").status
+          : undefined,
+      ),
+      microphone: "UNKNOWN",
+      observedAt: now,
+      source: "capability-report",
+    };
+
+    env.freshness = computeFreshness(now, Date.now());
+    timing.aggregationMs = Date.now() - aggStart;
+    timing.totalContextMs = Date.now() - totalStart;
+
+    const changes = this.environmentChanges.observe(env);
+
+    this.audit.append({
+      timestamp: new Date().toISOString(),
+      toolId: "environment.snapshot",
+      query: "system.context",
+      systemStatus: "unavailable",
+      applicationsStatus: mapDomain(env.application.available),
+      screenStatus: mapDomain(env.screen.available),
+      activityStatus: mapDomain(env.userActivity.available),
+      presenceStatus: "unknown",
+      filesStatus: "unavailable",
+      result: "success",
+      latencyMs: timing.totalContextMs,
+    });
+
+    return { environment: env, timing, changes };
+  }
+
 
   async getSnapshot(
     query: ContextQueryKind = "system.context",
@@ -300,6 +731,15 @@ export class ContextService {
         width: s.width ?? null,
         height: s.height ?? null,
         isPrimary: s.isPrimary ?? null,
+        scaleFactor: s.scaleFactor ?? null,
+        bounds: s.bounds
+          ? {
+              x: s.bounds.x,
+              y: s.bounds.y,
+              width: s.bounds.width,
+              height: s.bounds.height,
+            }
+          : null,
       }));
 
       let windows: ContextScreenInfo["windows"];
@@ -310,6 +750,15 @@ export class ContextService {
           id: w.id ?? null,
           title: w.title ?? null,
           applicationName: w.applicationName ?? null,
+          bundleId: w.bundleId ?? null,
+          bounds: w.bounds
+            ? {
+                x: w.bounds.x,
+                y: w.bounds.y,
+                width: w.bounds.width,
+                height: w.bounds.height,
+              }
+            : null,
         }));
       }
       const active = await this.screen!.activeWindow();
@@ -321,6 +770,33 @@ export class ContextService {
             active.data.window.applicationName ??
             active.data.application ??
             null,
+          bundleId: active.data.window.bundleId ?? null,
+          bounds: active.data.window.bounds
+            ? {
+                x: active.data.window.bounds.x,
+                y: active.data.window.bounds.y,
+                width: active.data.window.bounds.width,
+                height: active.data.window.bounds.height,
+              }
+            : null,
+        };
+      }
+
+      let session: ContextScreenInfo["session"] = null;
+      const sess = await this.screen!.session();
+      if (sess.success) {
+        const hasAny =
+          sess.data.locked != null || sess.data.userPresent != null;
+        session = {
+          locked: sess.data.locked,
+          userPresent: sess.data.userPresent,
+          status: hasAny ? "available" : "unknown",
+        };
+      } else {
+        session = {
+          locked: null,
+          userPresent: null,
+          status: mapScreenError(sess.error.code),
         };
       }
 
@@ -329,6 +805,7 @@ export class ContextService {
         displays,
         windows,
         activeWindow,
+        session,
         reason:
           !win.success
             ? `windows: ${win.error.code}`
@@ -473,4 +950,33 @@ function mapScreenError(code: string): DomainStatus {
   if (code.includes("PERMISSION")) return "permission_required";
   if (code.includes("UNAVAILABLE")) return "unavailable";
   return "error";
+}
+
+function mapEnvAvail(code: string): EnvAvailability {
+  if (code.includes("PERMISSION")) return "PERMISSION_REQUIRED";
+  if (code.includes("UNAVAILABLE")) return "UNAVAILABLE";
+  return "UNKNOWN";
+}
+
+function mapPerm(
+  status: string | undefined,
+): PermissionReportState {
+  if (!status) return "UNKNOWN";
+  if (status === "AVAILABLE") return "AVAILABLE";
+  if (status === "PERMISSION_REQUIRED") return "REQUIRED";
+  if (status === "UNAVAILABLE") return "DENIED";
+  return "UNKNOWN";
+}
+
+function mapDomain(a: EnvAvailability): DomainStatus {
+  switch (a) {
+    case "AVAILABLE":
+      return "available";
+    case "PERMISSION_REQUIRED":
+      return "permission_required";
+    case "UNKNOWN":
+      return "unknown";
+    default:
+      return "unavailable";
+  }
 }

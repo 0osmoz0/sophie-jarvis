@@ -1,0 +1,41 @@
+=== JARVIS CURSOR & ENVIRONMENT PRE-AUDIT — PHASE 25A ===
+
+CURSOR API (codebase scan)
+----------------------------
+NSEvent.mouseLocation in addon: YES (Phase 25 target)
+CGEvent read APIs in addon: NO
+Expected: NSEvent.mouseLocation — no Accessibility required for point read
+Coordinate space: cocoa-global-bottom-left (primary origin bottom-left)
+Multi-display: global coords; negative X/Y possible on secondary layouts
+Movement: requires position(t) and position(t-Δt) — CursorMotionTracker
+
+ACCESSIBILITY / FOCUS
+---------------------
+AXUIElement in addon: YES
+Compare: NSWorkspace.frontmost | CGWindowList heuristic | AX focused window
+AX requires Accessibility TCC — denied → PERMISSION_REQUIRED, keep heuristic
+
+NOW PLAYING / AUDIO
+-------------------
+MediaRemote / MPNowPlaying in repo: NO
+macOS: MPNowPlayingInfoCenter iOS-oriented; MediaRemote private
+Spotify/Apple Music: per-app ScriptingBridge = EXTERNAL_INTEGRATION only
+Rule: app open ≠ playing — default UNAVAILABLE
+
+SOPHIE POSITION
+---------------
+SophiePublicSnapshot: no x/y/perch coordinates in integration layer
+distanceToSophie: must stay UNKNOWN (null) unless future anchor exists
+
+PHASE 24 BASELINE
+-----------------
+EnvironmentContext + EnvironmentChangeTracker: present
+cursor/audio sections: UNAVAILABLE placeholders
+window: CGWindowList heuristic
+
+NATIVE ADDON RUNTIME
+--------------------
+Loaded: true
+Exports: isNativeAvailable, listRunningApplications, getFrontmostApplication, openApplication, terminateApplicationGracefully, isApplicationRunning, getIdleTimeSeconds, getDisplays, getWindows, getActiveWindow, getSessionInfo, captureDisplay
+
+PRE-AUDIT STATUS: COMPLETE (read-only inventory)

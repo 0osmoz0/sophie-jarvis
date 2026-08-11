@@ -112,10 +112,28 @@ export class ContextFormatter {
     }
     const count = s.displays?.length ?? 0;
     const lines = ["Écran :", `• ${count} écran${count > 1 ? "s" : ""} détecté${count > 1 ? "s" : ""}`];
+    for (const d of s.displays ?? []) {
+      const scale =
+        d.scaleFactor != null ? ` @${d.scaleFactor}x` : "";
+      lines.push(
+        `• ${d.id ?? "?"}: ${d.width ?? "?"}×${d.height ?? "?"}${scale}${d.isPrimary ? " (principal)" : ""}`,
+      );
+    }
     if (s.activeWindow?.title || s.activeWindow?.applicationName) {
       lines.push(
         `• Fenêtre active : ${s.activeWindow.applicationName ?? "?"}${s.activeWindow.title ? ` — ${s.activeWindow.title}` : ""}`,
       );
+    }
+    if (s.session) {
+      if (s.session.status === "unknown") {
+        lines.push("• Session : inconnue (non inventée)");
+      } else if (s.session.locked === true) {
+        lines.push("• Session : verrouillée");
+      } else if (s.session.locked === false) {
+        lines.push("• Session : déverrouillée");
+      } else {
+        lines.push("• Session : état partiel / inconnu");
+      }
     }
     return lines.join("\n");
   }

@@ -45,12 +45,27 @@ export interface ContextDisplayEntry {
   width?: number | null;
   height?: number | null;
   isPrimary?: boolean | null;
+  /** Phase 24 — when backend provides it. */
+  scaleFactor?: number | null;
+  bounds?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null;
 }
 
 export interface ContextWindowEntry {
   id?: string | null;
   title?: string | null;
   applicationName?: string | null;
+  bundleId?: string | null;
+  bounds?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null;
 }
 
 export interface ContextScreenInfo {
@@ -58,6 +73,12 @@ export interface ContextScreenInfo {
   displays?: ContextDisplayEntry[];
   windows?: ContextWindowEntry[];
   activeWindow?: ContextWindowEntry | null;
+  /** Phase 24 — from ScreenService.session(); nulls stay null (never invent). */
+  session?: {
+    locked: boolean | null;
+    userPresent: boolean | null;
+    status: DomainStatus;
+  } | null;
   reason?: string | null;
 }
 
@@ -130,6 +151,12 @@ export interface ContextTiming {
   activityMs: number;
   totalMs: number;
   contextSnapshotMs: number;
+  /** Phase 24 — null when subsection not executed. */
+  sessionMs?: number | null;
+  windowMs?: number | null;
+  cursorMs?: number | null;
+  audioMs?: number | null;
+  aggregationMs?: number | null;
 }
 
 export interface ContextServiceResult {

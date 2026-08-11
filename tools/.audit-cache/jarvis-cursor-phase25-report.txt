@@ -1,0 +1,142 @@
+=== JARVIS CURSOR & ENVIRONMENT AUDIT ===
+
+VERSION
+-------
+0.25.0
+
+CURSOR
+------
+available: AVAILABLE when native addon rebuilt (getMouseLocation) or Mock
+source: NSEvent.mouseLocation / mock-cursor
+permission: generally none (not Accessibility)
+coordinateSpace: cocoa-global-bottom-left
+x/y: global logical points
+moving: null on first sample; true/false only with position(t) vs position(t-Δt)
+velocity: px/s from Δdistance/Δtime
+direction: normalized delta vector when moving
+nearby/approaching/leaving: null (UNKNOWN) — no Sophie global anchor
+freshness: Phase 24 FRESH/STALE/UNKNOWN
+
+MULTI-DISPLAY
+-------------
+primary: via EnvironmentContext.screen.primaryDisplay
+secondary: displayCount + bounds
+negativeCoordinates: supported in coordinate space (Cocoa global)
+scaleFactor: per display from NSScreen
+coordinateConversion: mapMouseToDisplay uses display bounds (logical)
+
+FOCUSED WINDOW
+--------------
+source: accessibility (AX) + cgwindow-heuristic (Phase 24 window.active)
+accessibility: getFocusedWindowInfo — PERMISSION_REQUIRED if TCC denied
+activeWindow: CGWindowList heuristic retained
+focusedWindow: AX kAXFocusedWindowAttribute when permitted
+heuristic: unchanged Phase 24
+reliability: AX > heuristic when Accessibility granted; else heuristic/UNKNOWN
+
+AUDIO / NOW PLAYING
+-------------------
+available: UNAVAILABLE
+source: none (audit: no public macOS Now Playing API)
+permission: n/a
+playing/paused/stopped: null (UNKNOWN ≠ false)
+application: null
+track/artist: not exposed (privacy)
+trackChanged: null
+reliability: Spotify open ≠ playing — enforced
+
+ENVIRONMENT CHANGES
+-------------------
+events: CURSOR_MOVED, CURSOR_ENTERED_PROXIMITY, CURSOR_LEFT_PROXIMITY,
+  FOCUSED_WINDOW_CHANGED, ACTIVE_APPLICATION_CHANGED, AUDIO_* (when data exists)
+bounded: 64 (EnvironmentChangeTracker)
+deduplicated: key-based diff
+freshness: per-section observedAt + global freshness
+
+JARVIS CONTEXT
+--------------
+available: ContextService.getEnvironmentSnapshot()
+queries: cursor x/y, focused window, apps, screen (honest UNAVAILABLE)
+clarifications: ReferenceResolver unchanged — multi-app → ambiguous
+unknown handling: null fields, never coerced to false
+
+SOPHIE
+------
+EnvironmentContext available: yes (passive)
+BehaviorBrain modified: NO
+automatic behaviors added: NO
+animations added: NO
+
+SECURITY
+--------
+jarvis-cursor-security-audit: CLEAN
+no ActionExecutor/PermissionManager/BehaviorBrain in observation modules
+no setInterval / permanent polling
+
+PRIVACY
+-------
+jarvis-cursor-privacy-audit: CLEAN
+no audio recording, clipboard, keystrokes in change log
+no full track titles in observability defaults
+
+PERFORMANCE
+-----------
+perf:environment: mock path measured (cursorMs, focusMs, totalContextMs)
+Live native: requires npm run build:native — not measured in CI
+
+SIMULATION
+----------
+MODE: SIMULATION
+events: 5000
+movingSamples: ~154 (requires sequential snapshots)
+NOT real observations
+
+ROOT CAUSES
+-----------
+- Sophie has no global x/y → proximity UNKNOWN by design
+- macOS Now Playing lacks stable public API for Phase 25 scope
+- AX focus requires Accessibility TCC
+- Native addon must be rebuilt for getMouseLocation/getFocusedWindowInfo exports
+
+MISSING CAPABILITIES
+--------------------
+- distanceToSophie (no Sophie anchor)
+- Now Playing / track metadata
+- Live cursor without build:native
+- Cursor on secondary display mapping (partial — bounds-based)
+
+RECOMMENDATIONS
+---------------
+P0: rebuild native addon; verify AX on dev machine
+P1: optional Sophie position anchor (future, explicit only)
+P1: per-app Now Playing integration (Spotify ScriptingBridge) if product requires
+P2: unify SecurityMonitor double Context snapshot
+
+ANIMATIONS NOT IMPLEMENTED
+--------------------------
+None — Phase 25 stops at EnvironmentContext exposure
+
+PHASE 26 CANDIDATES
+-------------------
+P0: Native rebuild CI + live cursor/AX validation
+P1: Sophie environmental consumer (still no BehaviorBrain)
+P1: Optional Now Playing per-app bridge (explicit config)
+P2: Natural environmental reactions (Phase future — not 26 by default)
+
+REGRESSION
+----------
+npx tsc --noEmit OK
+cursor smoke 9/9, sim 5000, audit/security/privacy OK
+environment smoke 13/13
+memory/conversation/decision/response/pipeline/observability/ollama/voice OK
+security-invariants OK
+
+PHASE 25 STATUS
+---------------
+COMPLETE
+
+PHASE 26
+--------
+NOT STARTED
+
+STOP.

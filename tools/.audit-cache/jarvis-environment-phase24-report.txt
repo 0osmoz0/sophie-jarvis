@@ -1,0 +1,144 @@
+=== JARVIS ENVIRONMENTAL AWARENESS — PHASE 24 ===
+
+VERSION
+-------
+0.24.0
+
+PRE-AUDIT
+---------
+tools/jarvis-environment-preaudit.ts
+tools/.audit-cache/jarvis-environment-phase24-preaudit.txt
+STATUS: COMPLETE (read-only before implementation)
+
+ARCHITECTURE
+------------
+OBSERVE → NORMALIZE → CONTEXTUALIZE → EXPOSE
+Never: OBSERVE → DECIDE → ACT
+
+ContextService.getEnvironmentSnapshot()
+  → EnvironmentContext (+ timing + bounded EnvironmentChange[])
+
+Environment* modules: no ActionExecutor / PermissionManager /
+ApplicationService / BehaviorBrain / shell / setInterval.
+
+ApplicationService.list() now prefers backend.listApplications()
+(NSWorkspace / mock) so Context sees real running apps.
+
+ContextSnapshot.screen enriched: scaleFactor, bounds, session.
+
+ANSWERS (livrable)
+------------------
+1. Données réellement disponibles?
+   Displays (count, primary, size, scale, bounds), apps active+running,
+   window metadata (title/bounds when permitted), idleSeconds,
+   session.locked when present, permission capability reports.
+2. Fiables?
+   NSScreen displays; IOKit idle duration; NSWorkspace running/frontmost
+   (bridge); Node system; session.locked if key present.
+3. UNKNOWN?
+   session.userPresent (often null); activity when backend unavailable;
+   microphone permission state; anything without source.
+4. Permissions?
+   Accessibility (frontmost/windows cases); Screen Recording (windows/
+   capture); Microphone = Voice only, not env observation.
+5. Écrans?
+   displayCount, primary, width/height/scaleFactor, bounds, globalBounds.
+6. Applications?
+   active, runningCount, recentApplications (≠ active).
+7. Fenêtres?
+   active window id/title/app/bounds flags; heuristique focus CG.
+8. Activité?
+   idleSeconds + activityLevel ACTIVE/RECENTLY_ACTIVE/IDLE/UNKNOWN;
+   IDLE ≠ ABSENT.
+9. Session?
+   locked / userPresent; UNKNOWN if both null (never coerced to false).
+10. Curseur?
+    NON — available=UNAVAILABLE (pas d’API fiable).
+11. Audio?
+    NON — UNAVAILABLE / EXTERNAL_INTEGRATION; open ≠ playing.
+12. Fraîcheur max?
+    FRESH ≤ ~2s; STALE ≥ ~15s; ageMs exposé; snapshot on-demand.
+13. Duplications restantes?
+    SecurityMonitor peut encore double-snapshot; Phase2 stubs vs native;
+    frontmost NSWorkspace vs CG active window.
+14. Sophie peut recevoir?
+    EnvironmentContext exposable via Context — Phase 24 n’envoie pas
+    d’événements BehaviorBrain / animations.
+15. JARVIS peut utiliser?
+    Queries context + getEnvironmentSnapshot; conversation « ferme-le »
+    via EnvironmentHints (clarify si multi).
+16. Nouveaux risques?
+    Sur-interprétation idle/session; confusion active vs running;
+    fuite titres fenêtres (metadata) — pas de pixels/OCR.
+17. Problèmes restants?
+    Pas de curseur/now-playing; fenêtre active heuristique;
+    userPresent null; pas de bridge AX dédié.
+18. Phase 25 nécessaire?
+    Cursor API si fiable; now-playing optionnel; AX focus window;
+    Sophie consume EnvironmentContext sans autorité —
+    Phase 25 NOT STARTED.
+
+SMOKE
+-----
+13/13 passed
+
+SIMULATION
+----------
+MODE: SIMULATION — 5000 snapshots
+NOT real observations
+
+SECURITY / PRIVACY
+------------------
+environment-security-audit: CLEAN
+environment-privacy-audit: CLEAN
+security-invariants: CLEAN
+
+REGRESSION
+----------
+npx tsc --noEmit OK
+Phases 13 native, 14 security, 15 monitor, 16 memory, 17 conversation,
+18 decision, 19 response, 20 pipeline, 21 observability, 22 ollama,
+23 voice — smokes/audits OK
+
+NON-REGRESSION
+--------------
+No auto actions; ActionExecutor/PermissionManager/ActionConfirmation/
+BehaviorBrain unchanged; no camera/mic permanent/continuous capture;
+no TCC bypass; no ContextService scheduler; env ≠ DecisionEngine.
+
+FILES CREATED
+-------------
+src/context/EnvironmentContext.ts
+src/context/EnvironmentChangeTracker.ts
+src/context/EnvironmentSimulator.ts
+docs/JARVIS_ENVIRONMENT.md
+tools/jarvis-environment-preaudit.ts
+tools/jarvis-environment-smoke.ts
+tools/jarvis-environment-audit.ts
+tools/jarvis-environment-security-audit.ts
+tools/jarvis-environment-privacy-audit.ts
+tools/jarvis-environment-simulation.ts
+tools/.audit-cache/jarvis-environment-phase24-preaudit.txt
+tools/.audit-cache/jarvis-environment-phase24-report.txt
+
+FILES MODIFIED
+--------------
+src/context/ContextService.ts
+src/context/types.ts
+src/context/ContextFormatter.ts
+src/context/index.ts
+src/applications/ApplicationService.ts
+src/platform/MockApplicationBackend.ts
+package.json (0.24.0 + scripts)
+README.md
+tools/security-invariants.ts
+
+PHASE 24 STATUS
+---------------
+COMPLETE
+
+PHASE 25
+--------
+NOT STARTED
+
+STOP.
