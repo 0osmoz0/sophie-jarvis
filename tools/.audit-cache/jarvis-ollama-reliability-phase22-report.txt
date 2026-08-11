@@ -1,0 +1,183 @@
+=== JARVIS OLLAMA RELIABILITY — PHASE 22 ===
+
+VERSION
+-------
+0.22.0
+
+PRE-AUDIT
+---------
+tools/jarvis-ollama-reliability-preaudit.ts
+tools/.audit-cache/jarvis-ollama-reliability-phase22-preaudit.txt
+STATUS: COMPLETE
+
+Gaps closed: taxonomy, retry, separate timeouts, circuit breaker,
+conservative JSON, AbortSignal, metrics, status on-demand.
+
+OLLAMA
+------
+provider: ollama
+model: llama3.2 (default / env)
+availability (this environment): UNAVAILABLE (connection failed)
+live audit: STATUS: UNAVAILABLE — no invented results
+
+ERROR HANDLING
+--------------
+LLMErrorCode taxonomy in src/ai/LLMError.ts
+Legacy status mapping preserved for IntentRouter
+User messages sanitized (no prompts/secrets/stack)
+
+RETRY
+-----
+LLMRetryPolicy maxAttempts=2, backoff 100/200ms (capped)
+Retryable: timeout, connection, 408/429/5xx
+Non-retryable: invalid JSON/schema, empty, too large, model not found,
+  interrupted, circuit open
+Smoke: retry success + retry exhausted verified
+
+TIMEOUT
+-------
+LLMTimeoutPolicy:
+  understandTimeoutMs default 15000
+  responseTimeoutMs default 12000
+Env: JARVIS_OLLAMA_UNDERSTAND_TIMEOUT_MS / RESPONSE / legacy TIMEOUT_MS
+
+CANCELLATION
+------------
+Optional AbortSignal on understand/generateResponse requests
+Merges with timeout AbortController
+Scope: network/LLM only — never ActionExecutor / consumed confirmation
+Smoke: cancellation via AbortSignal OK
+Limitation: no automatic cancel of authorized execution (by design)
+
+JSON VALIDATION
+---------------
+parseJsonCandidate / extractJsonObjectSafe
+Rejects empty, plain text, ambiguous multi-object, missing type
+Then IntentValidator (unchanged Phase 9)
+No aggressive intent invention
+
+FALLBACK
+--------
+generateResponse failure → ResponseGenerator deterministic fallback
+ACTION_SUCCESS facts preserved (smoke 16)
+Understand failure → no action / honest error
+
+CIRCUIT BREAKER
+---------------
+IMPLEMENTED (LLM layer only)
+CLOSED → OPEN after failureThreshold (default 3)
+cooldown → HALF_OPEN → success → CLOSED
+OPEN → LLM_CIRCUIT_OPEN without network hammering
+Does not touch permissions/executor/memory
+
+OBSERVABILITY
+-------------
+errorCode / retryable / attempt on LLM failures
+IntentRouter provider_error forwards metadata
+LLMMetrics + getRuntimeStatus() (AVAILABLE/DEGRADED/UNAVAILABLE/UNKNOWN)
+No prompt/response content in metrics
+
+METRICS
+-------
+llmRequests, successes, failures, timeouts, retries,
+invalidJson, invalidSchema, modelNotFound, fallbacks, circuitOpen
+understand / generateResponse latency buckets (measured only)
+
+SIMULATION
+----------
+MODE: SIMULATION
+requests: 5000
+success rate: 0.273 (by design — mixed failure modes)
+final failure rate: 0.727
+retry rate (approx): 0.546
+average attempts: 1.546
+average latency: ~0.7 ms (mock fetch)
+p95 latency: ~2 ms
+NOT real Ollama incidents
+
+LIVE AUDIT
+----------
+STATUS: UNAVAILABLE
+reason: Ollama connection failed
+No invented latency figures
+
+SECURITY
+--------
+tools/jarvis-ollama-reliability-security-audit.ts: CLEAN
+src/ai: no ActionExecutor / PermissionManager / shell / camera / mic
+Forbidden fields + injection still rejected (failure matrix)
+LLM FAILURE → NO UNAUTHORIZED ACTION (0 unauthorized)
+
+PRIVACY
+-------
+tools/jarvis-ollama-reliability-privacy-audit.ts: CLEAN
+LLMError sanitizes password/token fragments
+Metrics metadata-only
+
+REGRESSION
+----------
+npx tsc --noEmit OK
+Phase 22 tools OK (smoke 22/22, matrix, sim, live, security, privacy)
+Phases 1–21 smokes OK (core invariants include ollama allowlists)
+
+PERFORMANCE
+-----------
+Mock/injected path: sub-ms to few ms
+Live Ollama: not measured here (unavailable)
+Retries add bounded backoff only on retryable errors
+
+LIMITATIONS
+-----------
+- Circuit breaker is per-process, not distributed
+- Live Ollama not present in CI/dev environment for this run
+- AbortSignal cancels LLM only — not mid-execution actions
+- Pre-audit file still documents historical gaps (inventory snapshot)
+
+KNOWN FAILURE MODES
+-------------------
+Ollama down → LLM_CONNECTION_FAILED / UNAVAILABLE → no action
+Timeout → retry then LLM_TIMEOUT → no action
+429/5xx → retry then final failure → no action
+Model missing → LLM_MODEL_NOT_FOUND (non-retryable)
+Invalid JSON/schema → no action
+Circuit open → fail fast without hammering
+generateResponse fail after success → fallback wording only
+
+FILES CREATED
+-------------
+src/ai/LLMError.ts
+src/ai/LLMRetryPolicy.ts
+src/ai/LLMTimeoutPolicy.ts
+src/ai/LLMCircuitBreaker.ts
+src/ai/LLMMetrics.ts
+src/ai/llmJson.ts
+docs/JARVIS_OLLAMA_RELIABILITY.md
+tools/jarvis-ollama-reliability-preaudit.ts
+tools/jarvis-ollama-reliability-smoke.ts
+tools/jarvis-ollama-failure-matrix.ts
+tools/jarvis-ollama-reliability-simulation.ts
+tools/jarvis-ollama-live-audit.ts
+tools/jarvis-ollama-reliability-security-audit.ts
+tools/jarvis-ollama-reliability-privacy-audit.ts
+tools/.audit-cache/jarvis-ollama-reliability-phase22-preaudit.txt
+tools/.audit-cache/jarvis-ollama-reliability-phase22-report.txt
+
+FILES MODIFIED
+--------------
+src/ai/OllamaLLMProvider.ts
+src/ai/types.ts
+src/ai/index.ts
+src/ai/IntentRouter.ts
+package.json (0.22.0 + scripts)
+README.md
+tools/security-invariants.ts
+
+PHASE 22 STATUS
+---------------
+COMPLETE
+
+PHASE 23
+--------
+NOT STARTED
+
+STOP.

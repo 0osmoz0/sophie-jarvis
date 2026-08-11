@@ -1645,6 +1645,93 @@ const ALLOWLIST: Array<{ fileSubstring: string; patternNames: string[] }> = [
     ],
   },
   {
+    fileSubstring: "jarvis-ollama-reliability-preaudit.ts",
+    patternNames: [
+      "fs writeFile",
+      "ollama",
+      "microphone",
+      "camera access",
+      "fetch to external",
+    ],
+  },
+  {
+    fileSubstring: "jarvis-ollama-reliability-smoke.ts",
+    patternNames: [
+      "ollama",
+      "fetch to external",
+      "microphone",
+      "camera access",
+      "child_process",
+      "shell:true",
+    ],
+  },
+  {
+    fileSubstring: "jarvis-ollama-failure-matrix.ts",
+    patternNames: [
+      "ollama",
+      "fetch to external",
+      "microphone",
+      "camera access",
+      "shell:true",
+      "child_process",
+    ],
+  },
+  {
+    fileSubstring: "jarvis-ollama-reliability-simulation.ts",
+    patternNames: ["ollama", "fetch to external", "microphone", "camera access"],
+  },
+  {
+    fileSubstring: "jarvis-ollama-live-audit.ts",
+    patternNames: ["ollama", "fetch to external", "microphone", "camera access"],
+  },
+  {
+    fileSubstring: "jarvis-ollama-reliability-security-audit.ts",
+    patternNames: [
+      "child_process",
+      "microphone",
+      "camera access",
+      "ActionExecutor",
+      "PermissionManager",
+      "Robot / nut.js keyboard",
+      "ollama",
+    ],
+  },
+  {
+    fileSubstring: "jarvis-ollama-reliability-privacy-audit.ts",
+    patternNames: ["ollama", "microphone", "camera access", "fs writeFile"],
+  },
+  {
+    fileSubstring: "JARVIS_OLLAMA_RELIABILITY.md",
+    patternNames: [
+      "ollama",
+      "microphone",
+      "camera access",
+      "child_process",
+      "shell:true",
+      "fetch to external",
+    ],
+  },
+  {
+    fileSubstring: "LLMRetryPolicy.ts",
+    patternNames: ["ollama"],
+  },
+  {
+    fileSubstring: "LLMCircuitBreaker.ts",
+    patternNames: ["ollama"],
+  },
+  {
+    fileSubstring: "LLMError.ts",
+    patternNames: ["ollama"],
+  },
+  {
+    fileSubstring: "LLMMetrics.ts",
+    patternNames: ["ollama"],
+  },
+  {
+    fileSubstring: "LLMTimeoutPolicy.ts",
+    patternNames: ["ollama"],
+  },
+  {
     fileSubstring: "ObservabilityPolicy.ts",
     patternNames: ["microphone", "camera access"],
   },

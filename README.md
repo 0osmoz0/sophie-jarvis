@@ -1,9 +1,9 @@
-## Phase 1 → Phase 21
+## Phase 1 → Phase 22
 
-- **Phase 1–20** : Core → … → Pipeline Consolidation
-- **Phase 21** : Production Hardening & Observability (`0.21.0`) — COMPLETE
+- **Phase 1–21** : Core → … → Production Hardening
+- **Phase 22** : Ollama Production Reliability (`0.22.0`) — COMPLETE
 
-Voir `docs/JARVIS_OBSERVABILITY.md`.
+Voir `docs/JARVIS_OLLAMA_RELIABILITY.md`.
 
 ## Démarrage rapide
 
@@ -11,19 +11,18 @@ Voir `docs/JARVIS_OBSERVABILITY.md`.
 npm install
 npm run build:native   # optionnel, darwin + Xcode
 npm run jarvis
-npm run jarvis -- --timing
-npm run jarvis -- --trace
-npm run jarvis -- --metrics
+JARVIS_LLM_PROVIDER=mock npm run jarvis
 ```
 
 ## Validation
 
 ```bash
 npx tsc --noEmit
-npm run preaudit:production
-npm run audit:observability-security
-npm run audit:observability-privacy
-npm run test:failure-matrix
-npm run sim:chaos
-npm run sim:long-session
+npm run preaudit:ollama
+npm run smoke:ollama-reliability
+npm run test:ollama-failure-matrix
+npm run sim:ollama-reliability
+npm run audit:ollama-live
+npm run audit:ollama-security
+npm run audit:ollama-privacy
 ```

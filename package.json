@@ -1,6 +1,6 @@
 {
   "name": "sophie-jarvis",
-  "version": "0.21.0",
+  "version": "0.22.0",
   "description": "JARVIS Core — modular, permissioned tool execution foundation",
   "private": true,
   "type": "module",
@@ -68,7 +68,14 @@
     "audit:observability-privacy": "tsx tools/jarvis-observability-privacy-audit.ts",
     "test:failure-matrix": "tsx tools/jarvis-failure-matrix.ts",
     "sim:chaos": "tsx tools/jarvis-chaos-simulation.ts",
-    "sim:long-session": "tsx tools/jarvis-long-session-simulation.ts"
+    "sim:long-session": "tsx tools/jarvis-long-session-simulation.ts",
+    "preaudit:ollama": "tsx tools/jarvis-ollama-reliability-preaudit.ts",
+    "smoke:ollama-reliability": "tsx tools/jarvis-ollama-reliability-smoke.ts",
+    "test:ollama-failure-matrix": "tsx tools/jarvis-ollama-failure-matrix.ts",
+    "sim:ollama-reliability": "tsx tools/jarvis-ollama-reliability-simulation.ts",
+    "audit:ollama-live": "tsx tools/jarvis-ollama-live-audit.ts",
+    "audit:ollama-security": "tsx tools/jarvis-ollama-reliability-security-audit.ts",
+    "audit:ollama-privacy": "tsx tools/jarvis-ollama-reliability-privacy-audit.ts"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",

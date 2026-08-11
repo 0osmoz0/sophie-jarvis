@@ -70,6 +70,9 @@ export class IntentRouter {
         kind: "provider_error",
         status: llm.status,
         message: llm.error,
+        errorCode: llm.errorCode,
+        retryable: llm.retryable,
+        attempt: llm.attempt,
       };
     }
 

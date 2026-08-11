@@ -10,6 +10,23 @@ export type LLMProviderStatus =
   | "INVALID_RESPONSE"
   | "ERROR";
 
+/** Phase 22 — on-demand health observation (not a polling loop). */
+export type LLMAvailability =
+  | "AVAILABLE"
+  | "DEGRADED"
+  | "UNAVAILABLE"
+  | "UNKNOWN";
+
+export interface LLMRuntimeStatus {
+  provider: string;
+  model: string | null;
+  availability: LLMAvailability;
+  lastErrorCode: string | null;
+  lastSuccessfulRequestAt: string | null;
+  consecutiveFailures: number;
+  circuitState?: string | null;
+}
+
 /** Intent kinds that map 1:1 to ActionRegistry (Phase 8). */
 export type JarvisActionIntentType =
   | "file.copy"
@@ -179,6 +196,8 @@ export interface LLMUnderstandRequest {
   references?: LLMReferenceHint[];
   memory?: LLMMemoryHint[];
   environment?: LLMEnvironmentHint;
+  /** Phase 22 — optional AbortSignal (cancels network/LLM only). */
+  signal?: AbortSignal;
 }
 
 export interface LLMUnderstandSuccess {
@@ -188,6 +207,8 @@ export interface LLMUnderstandSuccess {
   raw: string;
   /** Parsed but not yet validated structure (may be untrusted). */
   candidate: unknown;
+  attempt?: number;
+  latencyMs?: number;
 }
 
 export interface LLMUnderstandFailure {
@@ -195,6 +216,12 @@ export interface LLMUnderstandFailure {
   status: Exclude<LLMProviderStatus, "AVAILABLE">;
   error: string;
   raw?: string;
+  /** Phase 22 — structured error code (metadata). */
+  errorCode?: string;
+  retryable?: boolean;
+  attempt?: number;
+  latencyMs?: number;
+  statusCode?: number;
 }
 
 export type LLMUnderstandResult = LLMUnderstandSuccess | LLMUnderstandFailure;
@@ -213,6 +240,8 @@ export interface LLMResponseGenerateRequest {
   errors?: Array<{ code?: string; message: string }>;
   styleNotes?: string[];
   maxChars?: number;
+  /** Phase 22 — optional AbortSignal (cancels network/LLM only). */
+  signal?: AbortSignal;
 }
 
 export interface LLMResponseGenerateSuccess {
@@ -221,12 +250,19 @@ export interface LLMResponseGenerateSuccess {
   text: string;
   confidence?: number;
   raw?: string;
+  attempt?: number;
+  latencyMs?: number;
 }
 
 export interface LLMResponseGenerateFailure {
   ok: false;
   status: Exclude<LLMProviderStatus, "AVAILABLE">;
   error: string;
+  errorCode?: string;
+  retryable?: boolean;
+  attempt?: number;
+  latencyMs?: number;
+  statusCode?: number;
 }
 
 export type LLMResponseGenerateResult =
@@ -311,6 +347,9 @@ export type IntentRouterOutcome =
       kind: "provider_error";
       status: Exclude<LLMProviderStatus, "AVAILABLE">;
       message: string;
+      errorCode?: string;
+      retryable?: boolean;
+      attempt?: number;
     };
 
 /** Limits — security before convenience. */
@@ -318,6 +357,9 @@ export const AI_LIMITS = {
   maxUserTextChars: 2_000,
   maxLlmOutputChars: 4_000,
   maxPayloadStringChars: 1_000,
+  /** IntentRouter: no infinite understand retries (Phase 9). Ollama has its own Phase 22 policy. */
   maxRetries: 0,
   defaultTimeoutMs: 15_000,
+  /** Phase 22 Ollama controlled retries (attempts including first). */
+  ollamaMaxAttempts: 2,
 } as const;
