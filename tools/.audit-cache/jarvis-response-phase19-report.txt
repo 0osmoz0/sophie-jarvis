@@ -1,0 +1,157 @@
+=== JARVIS RESPONSE INTELLIGENCE — PHASE 19 ===
+
+VERSION
+-------
+0.19.0
+
+PRE-AUDIT
+---------
+tools/jarvis-response-preaudit.ts
+tools/.audit-cache/jarvis-response-phase19-preaudit.txt
+
+Responses were hardcoded in ResponseFormatter / ContextFormatter / runtime
+inline strings. LLMProvider had understand() only. Action results often
+unused in success messages.
+
+ARCHITECTURE
+------------
+RESULT → ResponsePolicy (imposed category) → optional LLM generateResponse
+→ ResponseValidator → fallback → user
+
+RESPONSE MODEL
+--------------
+ResponseDraft { text, tone, source, confidence, facts, warnings, category, usedLlm }
+Facts supplied by JARVIS only.
+
+LLM RESPONSE PROVIDER
+---------------------
+LLMProvider.understand() + LLMProvider.generateResponse()
+Mock: deterministic French wording from facts
+Ollama: RESPONSE_SYSTEM_PROMPT (FR, facts-only, no execution)
+Unavailable → fallback, never fake success
+
+POLICY
+------
+Categories imposed by runtime/DecisionEngine:
+ACTION_SUCCESS/FAILURE/DENIED/CANCELLED/TIMEOUT/CONFIRMATION,
+ANSWER, CLARIFICATION, REFUSAL, NO_ACTION, ERROR, DEFER
+
+VALIDATION
+----------
+Rejects executable shell blocks, tool calls, permission/confirmation claims,
+invented action claims without ACTION_RESULT facts.
+Allows discussing that shell commands cannot be run.
+
+FALLBACK
+--------
+ResponseDraftFormatter.fallback() always available; used when LLM missing
+or validation rejects LLM wording.
+
+CONVERSATION
+------------
+Assistant text still stored in ConversationStore via finish();
+not auto-written to MemoryStore.
+
+MEMORY
+------
+Budgeted hints (max 5 / 800 chars) as CONTEXT only — never authority.
+Explicit user request still wins (Phase 17/18).
+
+ACTION RESULTS
+--------------
+Runtime naturalize() after execute success/failure and confirmation.
+Narrates e.g. "Safari est ouvert." from facts.
+
+CONTEXT RESULTS
+---------------
+handleContextIntent naturalizes ANSWER with contextResult.available flag;
+unavailable → no invented screen/app state.
+
+SECURITY
+--------
+src/response forbids ActionExecutor/PermissionManager/ActionConfirmation/
+FileService/ApplicationService/BehaviorBrain/shell/native automation.
+Security answers keep disclaimer; no "piraté" without evidence.
+
+PERFORMANCE
+-----------
+Simulation (deterministic generator, no LLM): avg ~0.003ms over 5000.
+No fictional user SLA.
+
+SIMULATION
+----------
+MODE: SIMULATION — 5000 synthetic responses
+Even category distribution; llm_usage_rate=0 (fallback-only simulator)
+
+SECURITY AUDIT
+--------------
+PASSED (static + claim rejection)
+
+PRIVACY AUDIT
+-------------
+Response audit stores responseId/category/source/confidence/factKeys —
+not user message content.
+
+TESTS
+-----
+jarvis-response-smoke 14/14
+jarvis-response-audit PASSED
+jarvis-response-security-audit PASSED
+jarvis-response-simulation SIMULATION OK
+
+REGRESSION
+----------
+tsc OK; Phases 1–18 smokes green after docs allowlist; core invariants OK
+
+LIMITATIONS
+-----------
+- Not every runtime branch calls naturalize (main paths covered)
+- Double understand on action path remains
+- Ollama generateResponse not required for green CI (mock/fallback)
+
+KNOWN FAILURE MODES
+-------------------
+- LLM may still produce verbose text → validator/fallback clips/rejects
+- If facts incomplete, wording stays generic but truthful
+
+FILES CREATED
+-------------
+src/response/types.ts
+src/response/ResponsePolicy.ts
+src/response/ResponseValidator.ts
+src/response/ResponseFormatter.ts
+src/response/ResponseAuditLog.ts
+src/response/ResponseGenerator.ts
+src/response/ResponseSimulator.ts
+src/response/index.ts
+docs/JARVIS_RESPONSE.md
+tools/jarvis-response-preaudit.ts
+tools/jarvis-response-smoke.ts
+tools/jarvis-response-audit.ts
+tools/jarvis-response-security-audit.ts
+tools/jarvis-response-simulation.ts
+tools/.audit-cache/jarvis-response-phase19-preaudit.txt
+tools/.audit-cache/jarvis-response-phase19-report.txt
+
+FILES MODIFIED
+--------------
+package.json (0.19.0 + scripts)
+README.md
+src/ai/types.ts
+src/ai/LLMProvider.ts
+src/ai/MockLLMProvider.ts
+src/ai/OllamaLLMProvider.ts
+src/ai/index.ts
+src/runtime/JarvisRuntime.ts
+src/runtime/ResponseFormatter.ts
+src/runtime/types.ts
+tools/security-invariants.ts
+
+PHASE 19 STATUS
+---------------
+COMPLETE
+
+PHASE 20:
+NOT STARTED
+
+STOP.

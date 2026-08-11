@@ -65,11 +65,16 @@ export class ResponseFormatter {
     };
   }
 
-  executed(taskId: string, actionType: ActionType, result: unknown): JarvisResponse {
+  executed(
+    taskId: string,
+    actionType: ActionType,
+    result: unknown,
+    message?: string,
+  ): JarvisResponse {
     return {
       type: "executed",
       taskId,
-      message: successMessage(actionType),
+      message: message?.trim() || successMessage(actionType, result),
       result,
     };
   }
@@ -154,7 +159,15 @@ export class ResponseFormatter {
   }
 }
 
-function successMessage(actionType: ActionType): string {
+function successMessage(actionType: ActionType, result?: unknown): string {
+  const app =
+    result &&
+    typeof result === "object" &&
+    result !== null &&
+    "application" in result &&
+    typeof (result as { application?: unknown }).application === "string"
+      ? (result as { application: string }).application
+      : null;
   switch (actionType) {
     case "FILE_COPY":
       return "C'est fait, le fichier a été copié.";
@@ -165,9 +178,9 @@ function successMessage(actionType: ActionType): string {
     case "FILE_DELETE":
       return "Le fichier a été supprimé.";
     case "APP_OPEN":
-      return "J'ai ouvert l'application.";
+      return app ? `${app} est ouvert.` : "J'ai ouvert l'application.";
     case "APP_CLOSE":
-      return "L'application a été fermée.";
+      return app ? `${app} a été fermé.` : "L'application a été fermée.";
   }
 }
 

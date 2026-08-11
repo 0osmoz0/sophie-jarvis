@@ -129,6 +129,9 @@ export interface ConversationTiming {
   contextBuildMs: number;
   summaryMs: number;
   totalConversationMs: number;
+  /** Phase 20 — diagnostic only. */
+  memoryRecallUsed?: boolean;
+  memoryRecallSkipped?: boolean;
 }
 
 export const CONVERSATION_PRIORITY = [

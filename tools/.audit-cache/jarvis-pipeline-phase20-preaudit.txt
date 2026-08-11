@@ -1,0 +1,68 @@
+=== JARVIS PIPELINE PRE-AUDIT ===
+
+INPUT
+-----
+User text → ConversationService.prepareTurn → IntentRouter.understand
+
+UNDERSTAND
+----------
+calls (ouvre Safari action path): 1 (target: 1)
+calls (bonjour): 1
+calls (ferme-le no context): 1
+latency (action open totalMs): 8.000
+duplicate calls: NO — single-pass OK
+
+VALIDATION
+----------
+IntentValidator inside IntentRouter.understand (once per understand)
+
+DECISION
+--------
+DecisionEngine.evaluate once per new intent turn
+decisionMs (open): 1
+
+PLANNING
+--------
+IntentRouter.planFromOutcome (no second LLM) → ActionService.plan
+planningMs: 0
+
+PERMISSION
+----------
+ActionPermissionPolicy / PermissionManager inside ActionService (unchanged)
+
+CONFIRMATION
+------------
+ActionConfirmation token issue; user oui/non
+
+EXECUTION
+---------
+ActionExecutor only after confirm (unchanged)
+
+RESPONSE
+--------
+ResponseGenerator.naturalize once per narrated branch
+responseGenerationMs: 0
+
+TOTAL
+-----
+open turn totalMs: 8.000
+llmUnderstandCalls: 1
+
+DUPLICATIONS
+------------
+Historical: planFromText re-called understand (Phase 10–19)
+Fixed target: planFromOutcome reuses ValidatedIntent
+
+BOTTLENECKS
+-----------
+With mock LLM: runtime overhead dominates (sub-ms to few ms)
+With Ollama: understand + response generation dominate (measure separately)
+
+RECOMMENDATIONS
+---------------
+1. Keep single-pass understand (planFromOutcome)
+2. Expose PipelineTiming via --timing
+3. Measure Ollama separately (no invented numbers)
+4. Keep memory/context selective recall (already present)
+
+PRE-AUDIT STATUS: SINGLE-PASS VERIFIED

@@ -1,6 +1,6 @@
 {
   "name": "sophie-jarvis",
-  "version": "0.18.0",
+  "version": "0.20.0",
   "description": "JARVIS Core — modular, permissioned tool execution foundation",
   "private": true,
   "type": "module",
@@ -51,7 +51,18 @@
     "audit:decision": "tsx tools/jarvis-decision-audit.ts",
     "audit:decision-security": "tsx tools/jarvis-decision-security-audit.ts",
     "sim:decision": "tsx tools/jarvis-decision-simulation.ts",
-    "preaudit:decision": "tsx tools/jarvis-decision-preaudit.ts"
+    "preaudit:decision": "tsx tools/jarvis-decision-preaudit.ts",
+    "smoke:response": "tsx tools/jarvis-response-smoke.ts",
+    "audit:response": "tsx tools/jarvis-response-audit.ts",
+    "audit:response-security": "tsx tools/jarvis-response-security-audit.ts",
+    "sim:response": "tsx tools/jarvis-response-simulation.ts",
+    "preaudit:response": "tsx tools/jarvis-response-preaudit.ts",
+    "preaudit:pipeline": "tsx tools/jarvis-pipeline-preaudit.ts",
+    "audit:pipeline": "tsx tools/jarvis-pipeline-audit.ts",
+    "audit:pipeline-security": "tsx tools/jarvis-pipeline-security-audit.ts",
+    "sim:pipeline": "tsx tools/jarvis-pipeline-simulation.ts",
+    "audit:llm-perf": "tsx tools/jarvis-llm-performance-audit.ts",
+    "bench:interaction": "tsx tools/jarvis-interaction-benchmark.ts"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",

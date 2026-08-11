@@ -286,7 +286,7 @@ export class ConversationService {
     let memoryHints: ConversationUnderstandBundle["memoryHints"] = [];
     const shouldRecallMemory =
       this.enableMemoryHints &&
-      this.memoryService &&
+      !!this.memoryService &&
       !earlyClarification &&
       looksLikeMemoryQuestion(text) &&
       !referenceResult.resolved;
@@ -301,6 +301,11 @@ export class ConversationService {
         kind: m.kind,
         content: m.content,
       }));
+      timing.memoryRecallUsed = memoryHints.length > 0;
+      timing.memoryRecallSkipped = false;
+    } else {
+      timing.memoryRecallUsed = false;
+      timing.memoryRecallSkipped = true;
     }
     timing.memoryRecallMs = this.now() - memStart;
 

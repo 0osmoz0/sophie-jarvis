@@ -1,0 +1,253 @@
+=== JARVIS PIPELINE CONSOLIDATION — PHASE 20 ===
+
+VERSION
+-------
+0.20.0
+
+PRE-AUDIT
+---------
+tools/jarvis-pipeline-preaudit.ts
+tools/.audit-cache/jarvis-pipeline-phase20-preaudit.txt
+
+Action path "ouvre Safari":
+  understand calls: 1
+  duplicate calls: NO
+  PRE-AUDIT STATUS: SINGLE-PASS VERIFIED
+
+CURRENT PIPELINE
+----------------
+USER
+ → Conversation.prepareTurn
+ → UNDERSTAND ×1 (IntentRouter.understand)
+ → DecisionEngine.evaluate ×1
+ → planFromOutcome (no LLM) / Context / Memory
+ → Confirmation / Executor (unchanged Phase 8)
+ → ResponseGenerator ×1 (+ fallback)
+ → USER
+
+DUPLICATIONS FOUND
+------------------
+Historical (Phase 10–19): planFromText() re-invoked understand()
+  after Decision already had a ValidatedIntent → 2× LLM understand
+  on action planning path.
+
+Other: no systematic double DecisionEngine.evaluate per turn.
+Response: one generateResponse per narrated branch (fallback only
+  if LLM unavailable / rejected).
+
+DOUBLE UNDERSTAND
+-----------------
+BEFORE: understand → Decision → planFromText → understand AGAIN
+AFTER:  understand → Decision → planFromOutcome(outcome)
+
+SINGLE-PASS RESULT
+------------------
+VERIFIED (pre-audit + pipeline-audit):
+  action path understandCalls = 1
+  timing.llmUnderstandCalls = 1
+  planFromOutcome does not call provider.understand
+
+PIPELINE CONTEXT
+----------------
+src/runtime/RequestPipelineContext.ts
+  RequestPipelineContext + PipelineTiming + classifyLatency
+  Carries results only — NO extra authority
+  Never LLM→Executor / Response→Permission
+
+TIMING
+------
+Unified PipelineTiming exposed via formatTiming / --timing
+CLI: npm run jarvis -- --timing
+
+Example (mock, greeting):
+  latency class: FAST
+  understand calls: 1
+  memory recall: skipped
+
+Latency classes (diagnostic only):
+  FAST <100ms | NORMAL 100–500 | SLOW 500–1500 | VERY_SLOW >1500
+
+OLLAMA PERFORMANCE
+------------------
+tools/jarvis-llm-performance-audit.ts
+STATUS: UNAVAILABLE
+provider: ollama
+reason: Ollama not reachable
+model: llama3.2
+endpoint: http://127.0.0.1:11434
+No invented latency figures.
+
+MOCK PERFORMANCE
+-----------------
+tools/jarvis-pipeline-simulation.ts
+MODE: SIMULATION
+requests: 5000
+
+UNDERSTAND  avg 0.011 ms  p50 0.000  p95 0.000  max 1.000
+DECISION    avg 0.004 ms  p50 0.000  p95 0.000  max 1.000
+PLANNING    avg 0.005 ms  p50 0.000  p95 0.000  max 1.000
+EXECUTION   avg 0.055 ms  p50 0.000  p95 1.000  max 2.000
+RESPONSE    avg 0.013 ms  p50 0.000  p95 0.000  max 1.000
+TOTAL       avg 0.059 ms  p50 0.000  p95 1.000  max 4.000
+
+(MockLLMProvider — not real Ollama latency)
+
+REAL INTERACTION BENCHMARK
+--------------------------
+JARVIS_LLM_PROVIDER=mock
+tools/jarvis-interaction-benchmark.ts
+
+Script: bonjour / qu'est-ce qui est ouvert ? / ouvre Safari
+  → oui / ferme-le / qu'est-ce qui est ouvert ? / mon Mac va bien ?
+
+Observations (mock):
+  - each new intent turn: understandCalls=1
+  - confirmation "oui": understandCalls=0, responseCalls=1
+  - action opens: confirmation_required then executed
+  - context queries without ContextService: error surfaced
+    (not silent success) — error propagation OK
+  - totals typically FAST (<100ms) under mock
+
+Ollama interaction: UNAVAILABLE in this environment
+  (same probe as llm-performance-audit)
+
+CONTEXT OPTIMIZATION
+--------------------
+ContextService already narrows domains by ContextQueryKind
+  (system.status skips apps/screen/activity; etc.)
+No new complex rule engine added.
+contextMs measured when context path runs.
+
+MEMORY OPTIMIZATION
+-------------------
+ConversationService recalls only if looksLikeMemoryQuestion
+  (and no early clarification / unresolved ref).
+Counters: memoryRecallUsed / memoryRecallSkipped
+Verified: "ouvre Safari" → memoryRecallSkipped=true
+
+CONVERSATION OPTIMIZATION
+-------------------------
+Window budget default: maxMessages=12, maxCharacters=3000
+Scale checkpoints (simulation):
+  n=10   windowMessages≤12
+  n=100  windowMessages=12
+  n=500  windowMessages=12
+  n=1000 windowMessages=12
+  n=5000 windowMessages=12
+Store can grow (capped separately); LLM window stays bounded.
+
+ERROR PROPAGATION
+-----------------
+Errors surface via runtime response types / naturalize.
+Clarification/error not rewritten as "tout s'est bien passé".
+Unavailable context → explicit unavailable/error message.
+Permission/confirmation/execution paths unchanged (Phase 8).
+
+INTERRUPTION / CANCELLATION
+---------------------------
+Current behavior (no complex cancel added):
+  - WAITING_CONFIRMATION: "non" cancels; new command can
+    invalidate pending (existing runtime behavior)
+  - No abort of in-flight LLM on new input
+  - Never arbitrarily cancel an already authorized/executing action
+Future: optional AbortSignal for LLM; never for completed auth.
+
+SECURITY INVARIANTS
+-------------------
+tools/jarvis-pipeline-security-audit.ts: CLEAN
+  RequestPipelineContext: no Executor/Permission imports
+  response/: no Executor/PermissionManager
+  planFromOutcome: no second understand
+  runtime: uses planFromOutcome
+Boundaries unchanged:
+  LLM interprets → Decision evaluates → Policy authorizes
+  → Executor acts → Response explains
+
+PRIVACY AUDIT
+-------------
+Perf/timing tools log metadata + latencies only
+  (no full prompts, no full memory, no secrets)
+
+TESTS
+-----
+npx tsc --noEmit                          OK
+npx tsx tools/jarvis-pipeline-preaudit.ts OK (SINGLE-PASS)
+npx tsx tools/jarvis-pipeline-audit.ts    OK
+npx tsx tools/jarvis-pipeline-security-audit.ts OK
+npx tsx tools/jarvis-pipeline-simulation.ts OK (5000)
+npx tsx tools/jarvis-llm-performance-audit.ts OK (UNAVAILABLE)
+JARVIS_LLM_PROVIDER=mock
+  npx tsx tools/jarvis-interaction-benchmark.ts OK
+
+REGRESSION
+----------
+Phase 1–19 smokes all passed:
+  core, observation, files, apps, macos backend, screen,
+  presence, actions, llm, runtime, context, integration,
+  macos-native, security, security-monitor, memory,
+  conversation, decision, response
+
+BEFORE / AFTER
+--------------
+BEFORE:
+  Action planning path often 2× understand (planFromText)
+  Timing fragmented / incomplete counters
+  Hard to answer "where is time spent?"
+
+AFTER:
+  1× understand per new intent turn (measured)
+  RequestPipelineContext + PipelineTiming + --timing
+  Mock 5k sim + interaction bench + Ollama probe
+  Memory/context selective paths measured
+  Security boundaries preserved
+
+LIMITATIONS
+-----------
+- Ollama not reachable here → no live LLM latency numbers
+- permissionMs not always separately instrumented
+  (still inside ActionService)
+- No mid-flight LLM cancellation
+- ContextService must be wired for context Q&A
+  (benchmark correctly shows unavailable without it)
+
+KNOWN BOTTLENECKS
+-----------------
+Mock: runtime overhead (sub-ms to few ms) — NOT production LLM cost
+Ollama (when present): expect understand + response to dominate
+  (often seconds; measure with audit:llm-perf — never invent)
+User confirmation wait is human latency (outside automated total)
+
+FILES CREATED
+-------------
+src/runtime/RequestPipelineContext.ts
+docs/JARVIS_PIPELINE.md
+tools/jarvis-pipeline-preaudit.ts
+tools/jarvis-pipeline-audit.ts
+tools/jarvis-pipeline-security-audit.ts
+tools/jarvis-pipeline-simulation.ts
+tools/jarvis-llm-performance-audit.ts
+tools/jarvis-interaction-benchmark.ts
+tools/.audit-cache/jarvis-pipeline-phase20-preaudit.txt
+tools/.audit-cache/jarvis-pipeline-phase20-report.txt
+
+FILES MODIFIED
+--------------
+package.json (0.20.0 + scripts)
+README.md
+src/ai/IntentRouter.ts (planFromOutcome)
+src/runtime/JarvisRuntime.ts
+src/runtime/index.ts
+src/runtime/types.ts
+src/conversation/ConversationService.ts
+src/conversation/types.ts
+tools/security-invariants.ts
+docs/JARVIS_RESPONSE.md (note single-pass fix)
+
+PHASE 20 STATUS
+---------------
+COMPLETE
+
+PHASE 21:
+NOT STARTED
+
+STOP.

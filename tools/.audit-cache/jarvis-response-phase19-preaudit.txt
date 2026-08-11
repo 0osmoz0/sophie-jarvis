@@ -1,0 +1,44 @@
+=== PHASE 19 RESPONSE PRE-AUDIT ===
+
+VERSION: 0.19.0
+
+CURRENT RESPONSE PATH
+---------------------
+JarvisRuntime.processInput → DecisionEngine → ResponseFormatter /
+ContextFormatter / inline security-memory strings → finish →
+conversation.appendAssistant. LLMProvider.understand only (no NL).
+
+AVAILABLE RESULT DATA
+---------------------
+Decision, IntentRouterOutcome, ContextSnapshot, Security alerts,
+Memory records, ActionPlan, executed.result (often unused in message).
+
+CURRENT HARDCODED RESPONSES
+---------------------------
+ResponseFormatter (greeting, conversation, successMessage FILE_*/APP_*),
+ActionConfirmation messages, ContextFormatter labels, DecisionEngine hints,
+JarvisRuntime memory/security inline French strings.
+
+MISSING RESPONSE CAPABILITIES
+-----------------------------
+No LLM generateResponse; no ResponseDraft; action results not narrated;
+no shared NL polish over context/security/memory answers.
+
+SECURITY BOUNDARIES
+-------------------
+LLM must not execute; IntentValidator + DecisionEngine + Phase 8 pipeline.
+Response layer must remain explain-only.
+
+DUPLICATIONS
+------------
+Clarification strings in Conversation/Decision/Formatter/MockLLM;
+runtime ResponseFormatter vs potential response module formatter.
+
+RECOMMENDATIONS
+---------------
+1. Add src/response/ with ResponseDraft + Generator + Policy + Validator
+2. LLMProvider.generateResponse() separate from understand()
+3. Deterministic fallback when LLM unavailable
+4. Facts-only input; never invent action/context results
+
+PRE-AUDIT STATUS: COMPLETE (read-only)

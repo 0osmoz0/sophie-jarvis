@@ -56,6 +56,16 @@ export interface InteractionTiming {
   conversationMs?: number | null;
   /** Phase 18 — DecisionEngine evaluation. */
   decisionMs?: number | null;
+  /** Phase 19 — natural response generation. */
+  responseGenerationMs?: number | null;
+  /** Phase 20 — detailed pipeline counters. */
+  llmUnderstandCalls?: number;
+  llmResponseCalls?: number;
+  referenceResolutionMs?: number | null;
+  memoryRecallMs?: number | null;
+  memoryRecallUsed?: boolean;
+  memoryRecallSkipped?: boolean;
+  contextMs?: number | null;
 }
 
 export interface RuntimeAuditEntry {

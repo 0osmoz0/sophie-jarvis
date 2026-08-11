@@ -11,6 +11,8 @@ export type {
   LLMMemoryHint,
   LLMEnvironmentHint,
   LLMUnderstandResult,
+  LLMResponseGenerateRequest,
+  LLMResponseGenerateResult,
   LLMCapabilityReport,
   IntentValidationResult,
   IntentRouterOutcome,

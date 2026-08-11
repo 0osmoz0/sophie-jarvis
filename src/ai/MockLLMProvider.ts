@@ -3,6 +3,8 @@ import type {
   LLMCapabilityReport,
   LLMUnderstandRequest,
   LLMUnderstandResult,
+  LLMResponseGenerateRequest,
+  LLMResponseGenerateResult,
 } from "./types.js";
 import { AI_LIMITS } from "./types.js";
 
@@ -373,6 +375,31 @@ export class MockLLMProvider implements LLMProvider {
     );
   }
 
+  /**
+   * Phase 19 — deterministic natural wording from structured facts.
+   * Never invents results not present in the request.
+   */
+  async generateResponse(
+    request: LLMResponseGenerateRequest,
+  ): Promise<LLMResponseGenerateResult> {
+    if (this.unavailable) {
+      return {
+        ok: false,
+        status: "UNAVAILABLE",
+        error: "Mock LLM unavailable",
+      };
+    }
+    const max = request.maxChars ?? 420;
+    const text = mockNaturalResponse(request).slice(0, max);
+    return {
+      ok: true,
+      status: "AVAILABLE",
+      text,
+      confidence: 0.9,
+      raw: text,
+    };
+  }
+
   private action(
     type: string,
     payload: Record<string, unknown>,
@@ -401,5 +428,51 @@ export class MockLLMProvider implements LLMProvider {
       raw,
       candidate,
     };
+  }
+}
+
+function mockNaturalResponse(request: LLMResponseGenerateRequest): string {
+  const facts = Object.fromEntries(
+    request.facts.map((f) => [f.key, f.value]),
+  );
+  switch (request.category) {
+    case "ACTION_SUCCESS": {
+      const app = facts["action.application"];
+      if (app && /OPEN|open/i.test(facts["action.type"] ?? "")) {
+        return `${app} est maintenant ouvert.`;
+      }
+      if (app && /CLOSE|close/i.test(facts["action.type"] ?? "")) {
+        return `${app} a été fermé.`;
+      }
+      return request.fallbackText || "C'est fait.";
+    }
+    case "ACTION_FAILURE":
+      return (
+        request.fallbackText ||
+        "Je n'ai pas réussi à effectuer cette action."
+      );
+    case "ACTION_DENIED":
+      return (
+        request.fallbackText ||
+        "Je ne peux pas faire ça avec les permissions actuelles."
+      );
+    case "ACTION_CONFIRMATION":
+      return (
+        request.fallbackText ||
+        "Je peux le faire, mais j'ai besoin de ta confirmation."
+      );
+    case "CLARIFICATION":
+      return request.fallbackText || "Tu peux préciser ?";
+    case "ANSWER": {
+      const open = facts["apps.open"];
+      if (open) return `Tu as actuellement ${open} ouverts.`;
+      return request.fallbackText || "Voici ce que je vois.";
+    }
+    case "NO_ACTION":
+      return request.fallbackText || "D'accord.";
+    case "REFUSAL":
+      return request.fallbackText || "Je ne peux pas traiter cette demande.";
+    default:
+      return request.fallbackText || "Je t'écoute.";
   }
 }

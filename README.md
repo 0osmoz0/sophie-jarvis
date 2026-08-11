@@ -1,9 +1,9 @@
-## Phase 1 → Phase 18
+## Phase 1 → Phase 20
 
-- **Phase 1–17** : Core → … → conversation multi-tour
-- **Phase 18** : Decision & Reasoning Engine (`0.18.0`)
+- **Phase 1–19** : Core → … → Natural Response
+- **Phase 20** : Pipeline Consolidation & Low-Latency (`0.20.0`) — COMPLETE
 
-Voir `docs/JARVIS_DECISION.md`.
+Voir `docs/JARVIS_PIPELINE.md`.
 
 ## Démarrage rapide
 
@@ -11,14 +11,17 @@ Voir `docs/JARVIS_DECISION.md`.
 npm install
 npm run build:native   # optionnel, darwin + Xcode
 npm run jarvis
+npm run jarvis -- --timing
 ```
 
 ## Validation
 
 ```bash
 npx tsc --noEmit
-npm run smoke:decision
-npm run audit:decision
-npm run audit:decision-security
-npm run sim:decision
+npm run preaudit:pipeline
+npm run audit:pipeline
+npm run audit:pipeline-security
+npm run sim:pipeline
+npm run audit:llm-perf
+JARVIS_LLM_PROVIDER=mock npm run bench:interaction
 ```

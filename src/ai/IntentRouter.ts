@@ -89,6 +89,8 @@ export class IntentRouter {
   /**
    * Understand + feed ActionService.plan for actionable intents only.
    * Never executes. Confirmation / Permission remain Phase 8.
+   *
+   * Prefer {@link planFromOutcome} when understand() already ran (Phase 20).
    */
   async planFromText(
     text: string,
@@ -101,6 +103,19 @@ export class IntentRouter {
     | { ok: false; outcome: IntentRouterOutcome; error: { code: string; message: string } }
   > {
     const outcome = await this.understand(text, options?.requestExtras);
+    return this.planFromOutcome(outcome, { dryRun: options?.dryRun });
+  }
+
+  /**
+   * Phase 20 — plan from an already-validated IntentRouterOutcome.
+   * Does NOT call LLM again (single-pass understanding).
+   */
+  planFromOutcome(
+    outcome: IntentRouterOutcome,
+    options?: { dryRun?: boolean },
+  ):
+    | { ok: true; outcome: IntentRouterOutcome; plan?: ActionPlan }
+    | { ok: false; outcome: IntentRouterOutcome; error: { code: string; message: string } } {
     if (outcome.kind !== "action") {
       return {
         ok: false,

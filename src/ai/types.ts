@@ -199,6 +199,40 @@ export interface LLMUnderstandFailure {
 
 export type LLMUnderstandResult = LLMUnderstandSuccess | LLMUnderstandFailure;
 
+/** Phase 19 — natural language response generation (explain only). */
+export interface LLMResponseGenerateRequest {
+  userMessage: string;
+  category: string;
+  fallbackText: string;
+  facts: Array<{ key: string; value: string; source: string }>;
+  decisionType?: string | null;
+  actionResult?: unknown;
+  contextResult?: unknown;
+  memory?: Array<{ kind: string; content: string }>;
+  securityAssessment?: unknown;
+  errors?: Array<{ code?: string; message: string }>;
+  styleNotes?: string[];
+  maxChars?: number;
+}
+
+export interface LLMResponseGenerateSuccess {
+  ok: true;
+  status: "AVAILABLE";
+  text: string;
+  confidence?: number;
+  raw?: string;
+}
+
+export interface LLMResponseGenerateFailure {
+  ok: false;
+  status: Exclude<LLMProviderStatus, "AVAILABLE">;
+  error: string;
+}
+
+export type LLMResponseGenerateResult =
+  | LLMResponseGenerateSuccess
+  | LLMResponseGenerateFailure;
+
 export interface LLMCapabilityReport {
   status: LLMProviderStatus;
   reason?: string;

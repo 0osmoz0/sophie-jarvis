@@ -19,6 +19,18 @@ import {
   DecisionExplanation,
   type Decision,
 } from "../decision/index.js";
+import {
+  ResponseGenerator,
+  type ResponseCategory,
+  type ResponseFact,
+  type ResponseGenerateRequest,
+} from "../response/index.js";
+import {
+  classifyLatency,
+  emptyPipelineTiming,
+  formatPipelineTiming,
+  type RequestPipelineContext,
+} from "./RequestPipelineContext.js";
 import type { JarvisSecurityIntentType, JarvisMemoryIntentType } from "../ai/types.js";
 import {
   contextSnapshotToSecurityObservation,
@@ -60,6 +72,10 @@ export interface JarvisRuntimeOptions {
   conversationService?: ConversationService;
   /** Optional Phase 18 decision engine (evaluates; never executes). */
   decisionEngine?: DecisionEngine;
+  /** Optional Phase 19 natural response generator (explains; never executes). */
+  responseGenerator?: ResponseGenerator;
+  /** Optional LLM provider reference for response wording (same as router provider). */
+  responseLlm?: import("../ai/LLMProvider.js").LLMProvider;
   formatter?: ResponseFormatter;
   context?: ConversationContext;
   audit?: RuntimeAuditSink;
@@ -72,6 +88,8 @@ export interface ProcessInputResult {
   state: RuntimeState;
   timing: InteractionTiming;
   interactionId: string;
+  /** Phase 20 — orchestration diagnostics (no authority). */
+  pipeline?: RequestPipelineContext;
 }
 
 /**
@@ -88,7 +106,10 @@ export class JarvisRuntime {
   private readonly memoryService: MemoryService | undefined;
   private readonly conversation: ConversationService;
   private readonly decisionEngine: DecisionEngine;
+  private readonly responseGenerator: ResponseGenerator;
   private lastDecision: Decision | null = null;
+  private lastUserText: string = "";
+  private lastPipeline: RequestPipelineContext | null = null;
   private readonly contextFormatter = new ContextFormatter();
   private pendingForgetQuery: string | null = null;
   private readonly formatter: ResponseFormatter;
@@ -121,6 +142,20 @@ export class JarvisRuntime {
       new DecisionEngine({
         now: this.now,
       });
+    this.responseGenerator =
+      options.responseGenerator ??
+      new ResponseGenerator({
+        provider: options.responseLlm,
+        now: this.now,
+      });
+  }
+
+  getResponseGenerator(): ResponseGenerator {
+    return this.responseGenerator;
+  }
+
+  getLastPipeline(): RequestPipelineContext | null {
+    return this.lastPipeline;
   }
 
   getDecisionEngine(): DecisionEngine {
@@ -181,7 +216,21 @@ export class JarvisRuntime {
       totalMs: 0,
       conversationMs: null,
       decisionMs: null,
+      responseGenerationMs: null,
+      llmUnderstandCalls: 0,
+      llmResponseCalls: 0,
+      referenceResolutionMs: null,
+      memoryRecallMs: null,
+      memoryRecallUsed: false,
+      memoryRecallSkipped: false,
+      contextMs: null,
     };
+    const pipeline: RequestPipelineContext = {
+      requestId: interactionId,
+      userText: "",
+      timing: emptyPipelineTiming(),
+    };
+    this.lastPipeline = pipeline;
 
     if (typeof input !== "string" || !input.trim()) {
       return this.finish(
@@ -198,6 +247,8 @@ export class JarvisRuntime {
     }
 
     const text = input.trim();
+    this.lastUserText = text;
+    pipeline.userText = text;
 
     // Phase 16 — pending memory forget confirmation (not an ActionExecutor path)
     if (this.pendingForgetQuery) {
@@ -318,11 +369,36 @@ export class JarvisRuntime {
       );
     }
     try {
+      const ctxStart = this.now();
       const result = await this.contextService.getSnapshot(query);
+      timing.contextMs = this.now() - ctxStart;
       const message = this.contextFormatter.format(result.snapshot, query);
+      const available =
+        !/indisponible|unavailable|permission/i.test(message);
+      const textOut = await this.naturalize(timing, {
+        category: "ANSWER",
+        fallbackText: message,
+        facts: [
+          {
+            key: "context.query",
+            value: query,
+            source: "CONTEXT_RESULT",
+          },
+          {
+            key: "context.summary",
+            value: message.slice(0, 240),
+            source: "CONTEXT_RESULT",
+          },
+        ],
+        contextResult: {
+          available,
+          summary: message,
+          reason: available ? undefined : message,
+        },
+      });
       return this.finish(
         interactionId,
-        this.formatter.contextMessage(message, result.snapshot),
+        this.formatter.contextMessage(textOut, result.snapshot),
         "IDLE",
         timing,
         totalStart,
@@ -703,11 +779,39 @@ export class JarvisRuntime {
     this.context.clearPending();
 
     if (!executed.success) {
+      const failText = await this.naturalize(timing, {
+        category: "ACTION_FAILURE",
+        fallbackText:
+          executed.error?.message ?? "Je n'ai pas réussi à effectuer cette action.",
+        facts: [
+          {
+            key: "action.type",
+            value: String(pending.plan.actionType),
+            source: "ACTION_RESULT",
+          },
+          {
+            key: "action.status",
+            value: "failure",
+            source: "ACTION_RESULT",
+          },
+        ],
+        actionResult: {
+          status: "failure",
+          actionType: String(pending.plan.actionType),
+          detail: executed.error?.message,
+        },
+        errors: [
+          {
+            code: executed.error?.code,
+            message: executed.error?.message ?? "Échec",
+          },
+        ],
+      });
       return this.finish(
         interactionId,
         this.formatter.error(
           executed.error?.code ?? RUNTIME_ERROR_CODES.EXECUTION_FAILED,
-          executed.error?.message ?? "Échec de l'exécution",
+          failText,
         ),
         "ERROR",
         timing,
@@ -717,12 +821,66 @@ export class JarvisRuntime {
       );
     }
 
+    const appLabel = extractAppLabel(pending.plan.payload);
+    const successFallback = appLabel
+      ? pending.plan.actionType === "APP_OPEN"
+        ? `${appLabel} est ouvert.`
+        : pending.plan.actionType === "APP_CLOSE"
+          ? `${appLabel} a été fermé.`
+          : this.formatter.formatCli(
+              this.formatter.executed(
+                pending.taskId,
+                pending.plan.actionType,
+                executed.data?.result,
+              ),
+            )
+      : this.formatter.formatCli(
+          this.formatter.executed(
+            pending.taskId,
+            pending.plan.actionType,
+            executed.data?.result,
+          ),
+        );
+    const successText = await this.naturalize(timing, {
+      category: "ACTION_SUCCESS",
+      fallbackText: successFallback,
+      facts: [
+        {
+          key: "action.type",
+          value: String(pending.plan.actionType),
+          source: "ACTION_RESULT",
+        },
+        {
+          key: "action.status",
+          value: "success",
+          source: "ACTION_RESULT",
+        },
+        ...(appLabel
+          ? [
+              {
+                key: "action.application",
+                value: appLabel,
+                source: "ACTION_RESULT" as const,
+              },
+            ]
+          : []),
+      ],
+      actionResult: {
+        status: "success",
+        actionType: String(pending.plan.actionType),
+        summary: successFallback,
+      },
+    });
+
     return this.finish(
       interactionId,
       this.formatter.executed(
         pending.taskId,
         pending.plan.actionType,
-        executed.data?.result,
+        { ...(typeof executed.data?.result === "object" && executed.data?.result
+          ? (executed.data.result as object)
+          : {}), ...(appLabel ? { application: appLabel } : {}) },
+        successText,
       ),
       "COMPLETED",
       timing,
@@ -798,12 +956,23 @@ export class JarvisRuntime {
       timing.decisionMs = decided.timing.totalDecisionMs;
       this.lastDecision = decided.decision;
       this.conversation.noteClarification();
+      const q =
+        decided.decision.clarificationQuestion ?? prepared.earlyClarification;
+      const textOut = await this.naturalize(timing, {
+        category: "CLARIFICATION",
+        fallbackText: q,
+        clarificationQuestion: q,
+        facts: [
+          {
+            key: "missing",
+            value: "target",
+            source: "CLARIFICATION",
+          },
+        ],
+      });
       return this.finish(
         interactionId,
-        this.formatter.clarification(
-          decided.decision.clarificationQuestion ??
-            prepared.earlyClarification,
-        ),
+        this.formatter.clarification(textOut),
         "IDLE",
         timing,
         totalStart,
@@ -818,6 +987,18 @@ export class JarvisRuntime {
     const llmStart = this.now();
     const outcome = await this.router.understand(effectiveText, requestExtras);
     timing.llmMs = this.now() - llmStart;
+    timing.llmUnderstandCalls = (timing.llmUnderstandCalls ?? 0) + 1;
+    const pipeline = this.lastPipeline;
+    if (pipeline) {
+      pipeline.effectiveText = effectiveText;
+      pipeline.understandOutcome = outcome;
+      pipeline.validatedIntentKind = outcome.kind;
+      pipeline.conversationBundle = prepared.bundle;
+    }
+    timing.referenceResolutionMs = prepared.timing.referenceResolveMs;
+    timing.memoryRecallMs = prepared.timing.memoryRecallMs;
+    timing.memoryRecallUsed = prepared.timing.memoryRecallUsed === true;
+    timing.memoryRecallSkipped = prepared.timing.memoryRecallSkipped === true;
 
     const decided = this.decisionEngine.evaluate({
       userText: text,
@@ -835,6 +1016,9 @@ export class JarvisRuntime {
     });
     timing.decisionMs = decided.timing.totalDecisionMs;
     this.lastDecision = decided.decision;
+    if (pipeline) {
+      pipeline.decision = decided.decision;
+    }
     const decision = decided.decision;
 
     if (decision.type === "DEFER" || outcome.kind === "provider_error") {
@@ -988,9 +1172,8 @@ export class JarvisRuntime {
     // Action → plan + confirmation (never execute here)
     this.state = "PLANNING";
     const planStart = this.now();
-    const planned = await this.router.planFromText(effectiveText, {
-      requestExtras,
-    });
+    // Phase 20 — reuse validated outcome (no second understand)
+    const planned = this.router.planFromOutcome(outcome);
     timing.planningMs = this.now() - planStart;
 
     if (!planned.ok) {
@@ -1047,6 +1230,9 @@ export class JarvisRuntime {
     }
 
     const plan = planned.plan;
+    if (this.lastPipeline) {
+      this.lastPipeline.actionPlan = plan;
+    }
     const issued = this.actions.requestConfirmation(plan.taskId);
     if (!issued.success || !issued.data) {
       const code = issued.error?.code ?? RUNTIME_ERROR_CODES.ERROR;
@@ -1085,11 +1271,37 @@ export class JarvisRuntime {
     });
     this.state = "WAITING_CONFIRMATION";
 
+    const confirmFallback = `${issued.data.request.message}\n\nConfirmation requise.\n[oui/non]`;
+    const confirmText = await this.naturalize(timing, {
+      category: "ACTION_CONFIRMATION",
+      fallbackText: confirmFallback,
+      facts: [
+        {
+          key: "action.type",
+          value: String(plan.actionType),
+          source: "ACTION_RESULT",
+        },
+        {
+          key: "action.status",
+          value: "pending",
+          source: "ACTION_RESULT",
+        },
+      ],
+      actionResult: {
+        status: "pending",
+        actionType: String(plan.actionType),
+        summary: issued.data.request.message,
+      },
+    });
     const resp = this.formatter.confirmationRequired(
       plan,
-      issued.data.request.message,
+      confirmText.replace(/\n\nConfirmation requise\.\n\[oui\/non\]\s*$/i, ""),
       issued.data.token.expiresAt,
     );
+    // Ensure confirmation suffix remains for CLI
+    if (!/Confirmation requise/i.test(resp.message)) {
+      resp.message = `${confirmText}`;
+    }
     return this.finish(
       interactionId,
       resp,
@@ -1100,6 +1312,55 @@ export class JarvisRuntime {
       "CONFIRMATION_REQUIRED",
       "issued",
     );
+  }
+
+  /**
+   * Phase 19 — natural wording from facts. Never executes or authorizes.
+   */
+  private async naturalize(
+    timing: InteractionTiming,
+    partial: {
+      category: ResponseCategory;
+      fallbackText: string;
+      facts?: ResponseFact[];
+      actionResult?: ResponseGenerateRequest["actionResult"];
+      contextResult?: ResponseGenerateRequest["contextResult"];
+      memoryHints?: ResponseGenerateRequest["memoryHints"];
+      securityAssessment?: ResponseGenerateRequest["securityAssessment"];
+      errors?: ResponseGenerateRequest["errors"];
+      clarificationQuestion?: string;
+    },
+  ): Promise<string> {
+    const start = this.now();
+    try {
+      const result = await this.responseGenerator.generate({
+        category: partial.category,
+        userMessage: this.lastUserText,
+        fallbackText: partial.fallbackText,
+        facts: partial.facts ?? [],
+        decisionType: this.lastDecision?.type ?? null,
+        decisionConfidence: this.lastDecision?.confidence ?? null,
+        clarificationQuestion:
+          partial.clarificationQuestion ??
+          this.lastDecision?.clarificationQuestion ??
+          null,
+        actionResult: partial.actionResult ?? null,
+        contextResult: partial.contextResult ?? null,
+        memoryHints: partial.memoryHints,
+        securityAssessment: partial.securityAssessment ?? null,
+        errors: partial.errors,
+      });
+      timing.responseGenerationMs =
+        (timing.responseGenerationMs ?? 0) + result.timing.totalMs;
+      if (result.draft.usedLlm) {
+        timing.llmResponseCalls = (timing.llmResponseCalls ?? 0) + 1;
+      }
+      return result.draft.text;
+    } catch {
+      timing.responseGenerationMs =
+        (timing.responseGenerationMs ?? 0) + (this.now() - start);
+      return partial.fallbackText;
+    }
   }
 
   private async loadEnvironmentHints(text: string): Promise<
@@ -1194,11 +1455,35 @@ export class JarvisRuntime {
       state: this.state,
     });
 
+    // Phase 20 — unify pipeline timing snapshot
+    const pipe = this.lastPipeline;
+    if (pipe && pipe.requestId === interactionId) {
+      pipe.timing.conversationMs = timing.conversationMs ?? null;
+      pipe.timing.referenceResolutionMs = timing.referenceResolutionMs ?? null;
+      pipe.timing.memoryRecallMs = timing.memoryRecallMs ?? null;
+      pipe.timing.llmUnderstandMs = timing.llmMs;
+      pipe.timing.validationMs = timing.validationMs;
+      pipe.timing.decisionMs = timing.decisionMs ?? null;
+      pipe.timing.planningMs = timing.planningMs;
+      pipe.timing.confirmationMs = timing.confirmationMs;
+      pipe.timing.executionMs = timing.executionMs;
+      pipe.timing.contextMs = timing.contextMs ?? null;
+      pipe.timing.llmResponseMs = timing.responseGenerationMs ?? null;
+      pipe.timing.totalMs = timing.totalMs;
+      pipe.timing.llmUnderstandCalls = timing.llmUnderstandCalls ?? 0;
+      pipe.timing.llmResponseCalls = timing.llmResponseCalls ?? 0;
+      pipe.timing.memoryRecallUsed = timing.memoryRecallUsed === true;
+      pipe.timing.memoryRecallSkipped = timing.memoryRecallSkipped === true;
+      pipe.latencyClass = classifyLatency(timing.totalMs);
+      pipe.decision = this.lastDecision;
+    }
+
     return {
       response,
       state: this.state,
       timing,
       interactionId,
+      pipeline: pipe && pipe.requestId === interactionId ? pipe : undefined,
     };
   }
 }
@@ -1225,7 +1510,42 @@ function toLlmExtras(
   };
 }
 
+function extractAppLabel(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const p = payload as Record<string, unknown>;
+  if (typeof p.application === "string" && p.application.trim()) {
+    return p.application.trim();
+  }
+  if (typeof p.applicationId === "string" && p.applicationId.trim()) {
+    return p.applicationId.trim();
+  }
+  return null;
+}
+
 export function formatTiming(timing: InteractionTiming): string {
+  // Prefer Phase 20 unified layout when counters are present
+  if (timing.llmUnderstandCalls != null) {
+    return formatPipelineTiming({
+      conversationMs: timing.conversationMs ?? null,
+      referenceResolutionMs: timing.referenceResolutionMs ?? null,
+      memoryRecallMs: timing.memoryRecallMs ?? null,
+      llmUnderstandMs: timing.llmMs,
+      validationMs: timing.validationMs,
+      decisionMs: timing.decisionMs ?? null,
+      planningMs: timing.planningMs,
+      permissionMs: null,
+      confirmationMs: timing.confirmationMs,
+      executionMs: timing.executionMs,
+      contextMs: timing.contextMs ?? null,
+      llmResponseMs: timing.responseGenerationMs ?? null,
+      responseValidationMs: null,
+      totalMs: timing.totalMs,
+      llmUnderstandCalls: timing.llmUnderstandCalls ?? 0,
+      llmResponseCalls: timing.llmResponseCalls ?? 0,
+      memoryRecallUsed: timing.memoryRecallUsed === true,
+      memoryRecallSkipped: timing.memoryRecallSkipped === true,
+    });
+  }
   const lines = ["Interaction", "────────────────────────"];
   if (timing.conversationMs != null) {
     lines.push(`Conversation  ${(timing.conversationMs / 1000).toFixed(2)}s`);
@@ -1235,6 +1555,9 @@ export function formatTiming(timing: InteractionTiming): string {
   }
   if (timing.decisionMs != null) {
     lines.push(`Decision     ${timing.decisionMs}ms`);
+  }
+  if (timing.responseGenerationMs != null) {
+    lines.push(`Response     ${timing.responseGenerationMs}ms`);
   }
   if (timing.validationMs !== null) {
     lines.push(`Validation   ${timing.validationMs}ms`);
@@ -1253,3 +1576,11 @@ export function formatTiming(timing: InteractionTiming): string {
 }
 
 export type { ConversationTiming };
+export {
+  formatPipelineTiming,
+  classifyLatency,
+} from "./RequestPipelineContext.js";
+export type {
+  RequestPipelineContext,
+  PipelineTiming,
+} from "./RequestPipelineContext.js";
