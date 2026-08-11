@@ -1,9 +1,9 @@
-## Phase 1 → Phase 22
+## Phase 1 → Phase 23
 
-- **Phase 1–21** : Core → … → Production Hardening
-- **Phase 22** : Ollama Production Reliability (`0.22.0`) — COMPLETE
+- **Phase 1–22** : Core → … → Ollama Reliability
+- **Phase 23** : Voice Interface (`0.23.0`) — COMPLETE
 
-Voir `docs/JARVIS_OLLAMA_RELIABILITY.md`.
+Voir `docs/JARVIS_VOICE.md` (et `docs/JARVIS_OLLAMA_RELIABILITY.md` pour la Phase 22).
 
 ## Démarrage rapide
 
@@ -14,15 +14,15 @@ npm run jarvis
 JARVIS_LLM_PROVIDER=mock npm run jarvis
 ```
 
+La voix est **optionnelle** (Mock STT/TTS pour tests). Sans micro/TTS natif, le CLI texte reste le chemin principal.
+
 ## Validation
 
 ```bash
 npx tsc --noEmit
-npm run preaudit:ollama
-npm run smoke:ollama-reliability
-npm run test:ollama-failure-matrix
-npm run sim:ollama-reliability
-npm run audit:ollama-live
-npm run audit:ollama-security
-npm run audit:ollama-privacy
+npm run preaudit:voice
+npm run smoke:voice
+npm run audit:voice
+npm run audit:voice-privacy
+npm run sim:voice
 ```

@@ -1712,6 +1712,66 @@ const ALLOWLIST: Array<{ fileSubstring: string; patternNames: string[] }> = [
     ],
   },
   {
+    fileSubstring: "src/voice/",
+    patternNames: ["microphone"],
+  },
+  {
+    fileSubstring: "jarvis-voice-preaudit.ts",
+    patternNames: ["microphone", "fs writeFile"],
+  },
+  {
+    fileSubstring: "jarvis-voice-smoke.ts",
+    patternNames: [
+      "microphone",
+      "camera access",
+      "child_process",
+      "fetch to external",
+      "ollama",
+    ],
+  },
+  {
+    fileSubstring: "jarvis-voice-audit.ts",
+    patternNames: [
+      "child_process",
+      "exec(",
+      "spawn(",
+      "fork(",
+      "shell:true",
+      "microphone",
+      "camera access",
+      "ActionExecutor",
+      "PermissionManager",
+      "Robot / nut.js keyboard",
+    ],
+  },
+  {
+    fileSubstring: "jarvis-voice-privacy-audit.ts",
+    patternNames: ["microphone", "camera access", "fs writeFile"],
+  },
+  {
+    fileSubstring: "jarvis-voice-simulation.ts",
+    patternNames: [
+      "microphone",
+      "camera access",
+      "fetch to external",
+      "ollama",
+      "child_process",
+    ],
+  },
+  {
+    fileSubstring: "JARVIS_VOICE.md",
+    patternNames: [
+      "microphone",
+      "camera access",
+      "child_process",
+      "shell:true",
+      "BehaviorBrain",
+      "ollama",
+      "ActionExecutor",
+      "PermissionManager",
+    ],
+  },
+  {
     fileSubstring: "LLMRetryPolicy.ts",
     patternNames: ["ollama"],
   },

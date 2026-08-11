@@ -1,0 +1,169 @@
+=== JARVIS VOICE INTERFACE — PHASE 23 ===
+
+VERSION
+-------
+0.23.0
+
+PRE-AUDIT
+---------
+tools/jarvis-voice-preaudit.ts
+tools/.audit-cache/jarvis-voice-phase23-preaudit.txt
+STATUS: COMPLETE (read-only before implementation)
+
+Findings (pre-audit):
+1. Microphone abstraction? NO
+2. Audio output abstraction? NO
+3. STT? NO
+4. TTS? NO
+5. VoiceService? NO
+6. Local solution? Future SFSpeech / AVSpeech via native bridge
+7. External API? Optional future only if configured
+8. macOS permissions? Microphone TCC for real STT
+9. Without mic? YES (CLI + Mock / Unavailable)
+10. Without TTS? YES (text fallback)
+11. Optional? Entire voice module
+12. Unavailable? Honest VOICE_* errors
+
+ARCHITECTURE
+------------
+src/voice/ — interface only
+
+VoiceInput → VoicePolicy → SpeechToTextProvider → UserText
+  → JarvisRuntime.processInput() → ResponseDraft
+  → TextToSpeechProvider → VoiceOutput
+
+VoiceService does NOT import ActionExecutor, PermissionManager,
+ActionConfirmation, FileService, ApplicationService.
+
+VoiceState (IDLE/LISTENING/TRANSCRIBING/PROCESSING/SPEAKING/ERROR)
+is separate from JarvisRuntime FSM.
+
+ANSWERS (livrable)
+------------------
+1. STT retenu? MockSpeechToTextProvider (+ UnavailableSpeechToTextProvider défaut)
+2. Locale ou réseau? Locale simulée (Mock) — pas de réseau; SFSpeech futur
+3. TTS? MockTextToSpeechProvider (+ UnavailableTextToSpeechProvider)
+4. Permissions? Aucune pour Mock; Microphone TCC pour STT réel futur
+5. Sans microphone? OUI — CLI texte + Mock inject / Unavailable honnête
+6. Sans TTS? OUI — réponse texte; échec TTS ≠ échec action
+7. Latence réelle mesurée? Mock path: sub-ms à quelques ms (sim 5000)
+8. Latence indisponible? Micro réel / SFSpeech / AVSpeech — non mesurée (non livré)
+9. Données conservées? Metadata VoiceAudit (chars, buckets, ids, latences);
+   pas d’audio; transcript traité comme message user via ConversationStore seulement
+   quand processInput s’exécute; MemoryService inchangé (pas d’auto-mémoire vocale)
+10. Confirmations vocales? Exactement Phase 8 ActionConfirmation token via
+    processInput("oui") — jamais mot « oui » seul / confiance STT / contexte vocal
+11. Erreurs STT? Taxonomie VOICE_STT_* / PERMISSION_REQUIRED / EMPTY / LOW_CONFIDENCE;
+    low confidence → clarification, aucun processInput
+12. Erreurs TTS? Fallback texte; VOICE_TTS_* jamais promu en erreur d’action
+13. ConversationService? Via processInput normal (append user/assistant)
+14. MemoryService? Aucune promotion automatique Voice→Memory; MemoryPolicy décide
+15. Ollama? Indirect — même IntentRouter/LLM path qu’une entrée texte
+16. Nouveaux risques? Injection via transcript (mitigé par pipeline);
+    fausse confiance STT (bloquée sous seuil); confusion confirmation (token);
+    fuite audio (mitigée: pas de stockage); TCC bypass (interdit, messages honnêtes)
+17. Limitations? Pas de STT/TTS OS natif; pas de wake word; pas de micro réel;
+    push-to-talk explicite seulement; latence micro réelle indisponible
+18. Phase 24 nécessaires? Bridge natif SFSpeechRecognizer + AVSpeechSynthesizer;
+    permission TCC réelle; interruption barge-in OS; (wake word seulement si
+    infra propre) — Phase 24 NOT STARTED
+
+STT / TTS
+---------
+Priority 1: Mock local (tests / CLI inject) — livré
+Priority 2: Unavailable honest default — livré
+Priority 3: External API — NOT required, NOT shipped
+Native macOS — documented as future only
+
+CONFIRMATION
+------------
+Smoke 3–5: ouvre Safari → oui (token) → second oui rejected (NO_PENDING)
+Injection / stale oui / low confidence covered in smoke + simulation
+
+PRIVACY
+-------
+tools/jarvis-voice-privacy-audit.ts: CLEAN
+No audio storage, no full transcript in metrics, no MemoryStore dump in VoiceAudit
+
+SECURITY
+--------
+tools/jarvis-voice-audit.ts: CLEAN
+tools/security-invariants.ts: CLEAN (voice allowlists)
+src/voice has no executor/permission/shell/camera/continuous recording
+
+SIMULATION
+----------
+MODE: SIMULATION
+total: 5000
+distribution includes empty/low_conf/timeout/unavailable/ok_tts/ok_text
+processErrorRate: 0.000
+NOT real user voice statistics
+
+SMOKE
+-----
+8/8 passed (bonjour, context, confirm flow, TTS down, STT down,
+permission, low confidence, injection)
+
+OBSERVABILITY
+-------------
+VoiceMetrics + VoiceAuditLog (metadata) correlate via voiceRequestId + requestId
+Pipeline Phase 21 traces continue inside processInput (INPUT…RESPONSE)
+No audio / full transcript in metrics
+
+REGRESSION
+----------
+npx tsc --noEmit OK
+Voice tools OK (preaudit, smoke 8/8, audit, privacy, sim 5000)
+security-invariants OK
+Smokes Phases 1–22 OK (core → ollama reliability)
+Audits pipeline/response/decision/conversation/memory/security/
+  security-monitor/observability/ollama OK
+Phase 22 ollama failure matrix OK
+
+NON-REGRESSION
+--------------
+DecisionEngine / PermissionManager / ActionExecutor / ActionConfirmation /
+MemoryPolicy / SecurityMonitor — not modified for voice authority
+No wake word, no permanent mic, no TCC bypass
+
+FILES CREATED
+-------------
+src/voice/types.ts
+src/voice/VoiceError.ts
+src/voice/VoicePolicy.ts
+src/voice/VoiceValidator.ts
+src/voice/SpeechToTextProvider.ts
+src/voice/TextToSpeechProvider.ts
+src/voice/MockSpeechToTextProvider.ts
+src/voice/MockTextToSpeechProvider.ts
+src/voice/UnavailableSpeechToTextProvider.ts
+src/voice/UnavailableTextToSpeechProvider.ts
+src/voice/VoiceAuditLog.ts
+src/voice/VoiceMetrics.ts
+src/voice/VoiceSimulator.ts
+src/voice/VoiceService.ts
+src/voice/index.ts
+docs/JARVIS_VOICE.md
+tools/jarvis-voice-preaudit.ts
+tools/jarvis-voice-smoke.ts
+tools/jarvis-voice-audit.ts
+tools/jarvis-voice-privacy-audit.ts
+tools/jarvis-voice-simulation.ts
+tools/.audit-cache/jarvis-voice-phase23-preaudit.txt
+tools/.audit-cache/jarvis-voice-phase23-report.txt
+
+FILES MODIFIED
+--------------
+package.json (0.23.0 + voice scripts)
+README.md
+tools/security-invariants.ts (voice allowlists)
+
+PHASE 23 STATUS
+---------------
+COMPLETE
+
+PHASE 24
+--------
+NOT STARTED
+
+STOP.
