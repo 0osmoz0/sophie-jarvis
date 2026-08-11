@@ -31,6 +31,15 @@ import {
   formatPipelineTiming,
   type RequestPipelineContext,
 } from "./RequestPipelineContext.js";
+import {
+  PipelineTraceCollector,
+  PipelineMetrics,
+  formatPipelineTrace,
+  categorizeRuntimeCode,
+  type PipelineTrace,
+  type PipelineTraceSnapshot,
+  type ProductionMetricsSnapshot,
+} from "../observability/index.js";
 import type { JarvisSecurityIntentType, JarvisMemoryIntentType } from "../ai/types.js";
 import {
   contextSnapshotToSecurityObservation,
@@ -81,6 +90,9 @@ export interface JarvisRuntimeOptions {
   audit?: RuntimeAuditSink;
   /** Injected clock for expiration tests. */
   now?: () => number;
+  /** Phase 21 — optional observability (passive). */
+  traces?: PipelineTraceCollector;
+  metrics?: PipelineMetrics;
 }
 
 export interface ProcessInputResult {
@@ -90,6 +102,8 @@ export interface ProcessInputResult {
   interactionId: string;
   /** Phase 20 — orchestration diagnostics (no authority). */
   pipeline?: RequestPipelineContext;
+  /** Phase 21 — request trace snapshot (metadata only). */
+  trace?: PipelineTraceSnapshot;
 }
 
 /**
@@ -118,6 +132,11 @@ export class JarvisRuntime {
   private readonly now: () => number;
   private state: RuntimeState = "IDLE";
   private lastUserMessageId: string | null = null;
+  private readonly traces: PipelineTraceCollector;
+  private readonly metrics: PipelineMetrics;
+  private lastTrace: PipelineTraceSnapshot | null = null;
+  private activeTrace: PipelineTrace | null = null;
+  private inFlightRequestId: string | null = null;
 
   constructor(options: JarvisRuntimeOptions) {
     this.router = options.router;
@@ -131,6 +150,8 @@ export class JarvisRuntime {
     this.context = options.context ?? new ConversationContext();
     this.audit = options.audit ?? new MemoryRuntimeAuditLog();
     this.now = options.now ?? (() => Date.now());
+    this.traces = options.traces ?? new PipelineTraceCollector();
+    this.metrics = options.metrics ?? new PipelineMetrics();
     this.conversation =
       options.conversationService ??
       new ConversationService({
@@ -156,6 +177,22 @@ export class JarvisRuntime {
 
   getLastPipeline(): RequestPipelineContext | null {
     return this.lastPipeline;
+  }
+
+  getLastTrace(): PipelineTraceSnapshot | null {
+    return this.lastTrace;
+  }
+
+  getMetrics(): ProductionMetricsSnapshot {
+    return this.metrics.getSnapshot();
+  }
+
+  formatMetrics(): string {
+    return this.metrics.format();
+  }
+
+  getTraceCollector(): PipelineTraceCollector {
+    return this.traces;
   }
 
   getDecisionEngine(): DecisionEngine {
@@ -224,15 +261,91 @@ export class JarvisRuntime {
       memoryRecallUsed: false,
       memoryRecallSkipped: false,
       contextMs: null,
+      responseFallbackUsed: false,
     };
+
+    // Phase 21 — reject overlapping processInput (no cross-request contamination)
+    if (this.inFlightRequestId) {
+      this.metrics.recordRequest({
+        error: true,
+        concurrentRejected: true,
+        totalMs: 0,
+      });
+      return {
+        response: this.formatter.error(
+          RUNTIME_ERROR_CODES.CONCURRENT_REQUEST,
+          "Une requête est déjà en cours. Réessaie dans un instant.",
+        ),
+        state: this.state,
+        timing: { ...timing, totalMs: 0 },
+        interactionId,
+      };
+    }
+
     const pipeline: RequestPipelineContext = {
       requestId: interactionId,
       userText: "",
       timing: emptyPipelineTiming(),
     };
     this.lastPipeline = pipeline;
+    this.inFlightRequestId = interactionId;
+    const trace = this.traces.begin(interactionId, this.now);
+    this.activeTrace = trace;
+    trace.record("INPUT", "OK");
 
+    try {
+      return await this.processInputBody(
+        input,
+        interactionId,
+        timing,
+        totalStart,
+        pipeline,
+        trace,
+      );
+    } catch {
+      this.state = "IDLE";
+      this.context.clearPending();
+      trace.record("ERROR", "FAILED", {
+        category: "INTERNAL_ERROR",
+        code: RUNTIME_ERROR_CODES.INTERNAL_ERROR,
+      });
+      return this.finish(
+        interactionId,
+        this.formatter.error(
+          RUNTIME_ERROR_CODES.INTERNAL_ERROR,
+          "Une erreur interne est survenue.",
+        ),
+        "ERROR",
+        timing,
+        totalStart,
+        null,
+        RUNTIME_ERROR_CODES.INTERNAL_ERROR,
+      );
+    } finally {
+      this.inFlightRequestId = null;
+      this.activeTrace = null;
+      if (
+        this.state === "UNDERSTANDING" ||
+        this.state === "PLANNING" ||
+        this.state === "EXECUTING"
+      ) {
+        this.state = "IDLE";
+      }
+    }
+  }
+
+  private async processInputBody(
+    input: string,
+    interactionId: string,
+    timing: InteractionTiming,
+    totalStart: number,
+    pipeline: RequestPipelineContext,
+    trace: PipelineTrace,
+  ): Promise<ProcessInputResult> {
     if (typeof input !== "string" || !input.trim()) {
+      trace.record("ERROR", "FAILED", {
+        code: RUNTIME_ERROR_CODES.INVALID_INPUT,
+      });
       return this.finish(
         interactionId,
         this.formatter.error(
@@ -302,6 +415,10 @@ export class JarvisRuntime {
       if (this.context.isPendingExpired(this.now())) {
         this.context.clearPending();
         this.actions.cancel(pending.taskId);
+        trace.record("CONFIRMATION", "FAILED", {
+          code: "EXPIRED",
+          category: "CONFIRMATION_EXPIRED",
+        });
         return this.finish(
           interactionId,
           this.formatter.expired(),
@@ -315,21 +432,28 @@ export class JarvisRuntime {
 
       if (isAffirmative(text)) {
         this.recordFollowUpUser(text);
+        trace.record("CONFIRMATION", "OK", { detail: "affirmative" });
         return this.handleConfirmYes(interactionId, timing, totalStart);
       }
       if (isNegative(text)) {
         this.recordFollowUpUser(text);
+        trace.record("CONFIRMATION", "OK", { detail: "negative" });
         return this.handleConfirmNo(interactionId, timing, totalStart);
       }
 
       // New command while waiting → invalidate old pending, then process.
       this.context.invalidatePending("new_command");
       this.actions.cancel(pending.taskId);
+      trace.record("CONFIRMATION", "SKIPPED", { detail: "invalidated_new_command" });
     }
 
     // Lone oui/non without pending confirmation
     if (isAffirmative(text) || isNegative(text)) {
       this.recordFollowUpUser(text);
+      trace.record("CONFIRMATION", "FAILED", {
+        code: RUNTIME_ERROR_CODES.NO_PENDING_CONFIRMATION,
+        category: "CONFIRMATION_INVALID",
+      });
       return this.finish(
         interactionId,
         this.formatter.noPendingConfirmation(),
@@ -934,6 +1058,12 @@ export class JarvisRuntime {
     const prepared = await this.conversation.prepareTurn(text, environment);
     timing.conversationMs = prepared.timing.totalConversationMs;
     this.lastUserMessageId = prepared.userMessage.id;
+    this.activeTrace?.record("CONVERSATION", "OK", {
+      latencyMs: prepared.timing.totalConversationMs,
+    });
+    this.activeTrace?.record("REFERENCE", prepared.bundle.referenceResult?.resolved ? "OK" : "SKIPPED", {
+      latencyMs: prepared.timing.referenceResolveMs,
+    });
 
     if (prepared.earlyClarification) {
       const earlyOutcome = {
@@ -988,6 +1118,23 @@ export class JarvisRuntime {
     const outcome = await this.router.understand(effectiveText, requestExtras);
     timing.llmMs = this.now() - llmStart;
     timing.llmUnderstandCalls = (timing.llmUnderstandCalls ?? 0) + 1;
+    this.activeTrace?.record(
+      "UNDERSTAND",
+      outcome.kind === "provider_error" || outcome.kind === "rejected"
+        ? "FAILED"
+        : "OK",
+      {
+        latencyMs: timing.llmMs,
+        category: outcome.kind,
+        code:
+          outcome.kind === "provider_error"
+            ? outcome.status
+            : outcome.kind === "rejected"
+              ? outcome.code
+              : null,
+      },
+    );
+    this.activeTrace?.record("VALIDATION", outcome.kind === "rejected" ? "FAILED" : "OK");
     const pipeline = this.lastPipeline;
     if (pipeline) {
       pipeline.effectiveText = effectiveText;
@@ -1016,6 +1163,11 @@ export class JarvisRuntime {
     });
     timing.decisionMs = decided.timing.totalDecisionMs;
     this.lastDecision = decided.decision;
+    this.activeTrace?.record("DECISION", "OK", {
+      latencyMs: timing.decisionMs,
+      category: decided.decision.type,
+      detail: `confidence=${decided.decision.confidence.toFixed(2)}`,
+    });
     if (pipeline) {
       pipeline.decision = decided.decision;
     }
@@ -1354,11 +1506,14 @@ export class JarvisRuntime {
         (timing.responseGenerationMs ?? 0) + result.timing.totalMs;
       if (result.draft.usedLlm) {
         timing.llmResponseCalls = (timing.llmResponseCalls ?? 0) + 1;
+      } else {
+        timing.responseFallbackUsed = true;
       }
       return result.draft.text;
     } catch {
       timing.responseGenerationMs =
         (timing.responseGenerationMs ?? 0) + (this.now() - start);
+      timing.responseFallbackUsed = true;
       return partial.fallbackText;
     }
   }
@@ -1478,12 +1633,73 @@ export class JarvisRuntime {
       pipe.decision = this.lastDecision;
     }
 
+    // Phase 21 — commit trace + metrics (metadata only)
+    const trace = this.activeTrace;
+    if (trace && trace.requestId === interactionId) {
+      if ((timing.llmResponseCalls ?? 0) > 0 || timing.responseGenerationMs != null) {
+        trace.record(
+          "RESPONSE",
+          timing.responseFallbackUsed ? "FALLBACK" : "OK",
+          { latencyMs: timing.responseGenerationMs ?? null },
+        );
+      }
+      if (timing.planningMs != null) {
+        trace.record("PLANNING", "OK", { latencyMs: timing.planningMs });
+      }
+      if (timing.executionMs != null) {
+        trace.record("EXECUTION", executionStatus === "COMPLETED" ? "OK" : "FAILED", {
+          latencyMs: timing.executionMs,
+          code: resultCode,
+        });
+      }
+      if (nextState === "WAITING_CONFIRMATION") {
+        trace.record("PERMISSION", "WAITING", { detail: "confirmation_required" });
+      }
+      if (response.type === "error" || nextState === "ERROR") {
+        const cat = categorizeRuntimeCode(resultCode);
+        trace.setError(cat, resultCode);
+        trace.record("ERROR", "FAILED", { category: cat, code: resultCode });
+      } else {
+        trace.record("COMPLETE", "OK");
+      }
+      trace.setLlmCalls(
+        timing.llmUnderstandCalls ?? 0,
+        timing.llmResponseCalls ?? 0,
+      );
+      trace.complete(timing.totalMs, this.now);
+      this.lastTrace = this.traces.commit(trace);
+    }
+
+    this.metrics.recordRequest({
+      success: response.type === "executed" || response.type === "message",
+      error: response.type === "error",
+      clarification: response.type === "clarification",
+      refusal: resultCode === "REFUSAL" || resultCode === "DENIED",
+      action: response.type === "confirmation_required" || response.type === "executed",
+      cancelled: response.type === "cancelled" || resultCode === "CANCELLED",
+      timeout: resultCode === "TIMEOUT" || resultCode === "LLM_TIMEOUT",
+      llmUnavailable:
+        resultCode === "UNAVAILABLE" || resultCode === "LLM_UNAVAILABLE",
+      llmInvalid: resultCode === "INVALID_RESPONSE" || resultCode === "INVALID_INTENT",
+      permissionDenied: resultCode === "DENIED" || confirmationStatus === "denied",
+      executionFailed:
+        executionStatus === "ERROR" || resultCode === "EXECUTION_FAILED",
+      responseFallback: timing.responseFallbackUsed === true,
+      understandMs: timing.llmMs,
+      decisionMs: timing.decisionMs ?? null,
+      planningMs: timing.planningMs,
+      executionMs: timing.executionMs,
+      responseMs: timing.responseGenerationMs ?? null,
+      totalMs: timing.totalMs,
+    });
+
     return {
       response,
       state: this.state,
       timing,
       interactionId,
       pipeline: pipe && pipe.requestId === interactionId ? pipe : undefined,
+      trace: this.lastTrace?.requestId === interactionId ? this.lastTrace : undefined,
     };
   }
 }
@@ -1584,3 +1800,5 @@ export type {
   RequestPipelineContext,
   PipelineTiming,
 } from "./RequestPipelineContext.js";
+export { formatPipelineTrace } from "../observability/index.js";
+export type { PipelineTraceSnapshot } from "../observability/index.js";

@@ -1574,6 +1574,85 @@ const ALLOWLIST: Array<{ fileSubstring: string; patternNames: string[] }> = [
     ],
   },
   {
+    fileSubstring: "jarvis-production-preaudit.ts",
+    patternNames: [
+      "child_process",
+      "microphone",
+      "camera access",
+      "fetch to external",
+      "fs writeFile",
+      "ollama",
+    ],
+  },
+  {
+    fileSubstring: "jarvis-failure-matrix.ts",
+    patternNames: [
+      "child_process",
+      "microphone",
+      "camera access",
+      "fetch to external",
+      "ollama",
+      "shell:true",
+    ],
+  },
+  {
+    fileSubstring: "jarvis-chaos-simulation.ts",
+    patternNames: [
+      "microphone",
+      "camera access",
+      "fetch to external",
+      "ollama",
+      "child_process",
+    ],
+  },
+  {
+    fileSubstring: "jarvis-long-session-simulation.ts",
+    patternNames: ["microphone", "camera access", "fetch to external", "ollama"],
+  },
+  {
+    fileSubstring: "jarvis-observability-security-audit.ts",
+    patternNames: [
+      "child_process",
+      "exec(",
+      "spawn(",
+      "fork(",
+      "fetch to external",
+      "microphone",
+      "camera access",
+      "ActionExecutor",
+      "PermissionManager",
+      "Robot / nut.js keyboard",
+    ],
+  },
+  {
+    fileSubstring: "jarvis-observability-privacy-audit.ts",
+    patternNames: [
+      "microphone",
+      "camera access",
+      "fetch to external",
+      "fs writeFile",
+    ],
+  },
+  {
+    fileSubstring: "JARVIS_OBSERVABILITY.md",
+    patternNames: [
+      "microphone",
+      "camera access",
+      "child_process",
+      "shell:true",
+      "BehaviorBrain",
+      "ollama",
+    ],
+  },
+  {
+    fileSubstring: "ObservabilityPolicy.ts",
+    patternNames: ["microphone", "camera access"],
+  },
+  {
+    fileSubstring: "JarvisError.ts",
+    patternNames: [],
+  },
+  {
     fileSubstring: "jarvis-memory-simulation.ts",
     patternNames: [
       "microphone",

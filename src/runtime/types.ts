@@ -66,6 +66,8 @@ export interface InteractionTiming {
   memoryRecallUsed?: boolean;
   memoryRecallSkipped?: boolean;
   contextMs?: number | null;
+  /** Phase 21 — response used deterministic fallback (not invented). */
+  responseFallbackUsed?: boolean;
 }
 
 export interface RuntimeAuditEntry {
@@ -98,4 +100,6 @@ export const RUNTIME_ERROR_CODES = {
   PLAN_FAILED: "PLAN_FAILED",
   INVALID_INPUT: "INVALID_INPUT",
   ERROR: "ERROR",
+  CONCURRENT_REQUEST: "CONCURRENT_REQUEST",
+  INTERNAL_ERROR: "INTERNAL_ERROR",
 } as const;

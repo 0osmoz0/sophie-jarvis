@@ -31,7 +31,7 @@ import { IntentRouter } from "../ai/IntentRouter.js";
 import { OllamaLLMProvider } from "../ai/OllamaLLMProvider.js";
 import { MockLLMProvider } from "../ai/MockLLMProvider.js";
 import { formatLLMHealth, probeLLMHealth } from "../ai/LLMHealth.js";
-import { JarvisRuntime, formatTiming } from "./JarvisRuntime.js";
+import { JarvisRuntime, formatTiming, formatPipelineTrace } from "./JarvisRuntime.js";
 import { ResponseFormatter } from "./ResponseFormatter.js";
 
 function banner(): void {
@@ -190,6 +190,8 @@ async function main(): Promise<void> {
 
   const formatter = new ResponseFormatter();
   const showTiming = process.argv.includes("--timing");
+  const showTrace = process.argv.includes("--trace");
+  const showMetrics = process.argv.includes("--metrics");
 
   console.log("JARVIS ready.");
   if (process.env.JARVIS_LLM_PROVIDER === "mock") {
@@ -204,6 +206,9 @@ async function main(): Promise<void> {
 
   const shutdown = (): void => {
     securityMonitor.stop();
+    if (showMetrics) {
+      console.log(runtime.formatMetrics());
+    }
     console.log("Sophie > À bientôt.");
     rl.close();
   };
@@ -225,8 +230,22 @@ async function main(): Promise<void> {
         if (showTiming) {
           console.log(formatTiming(result.timing));
         }
+        if (showTrace && result.trace) {
+          console.log(formatPipelineTrace(result.trace));
+        }
+        if (showMetrics) {
+          console.log(runtime.formatMetrics());
+        }
         console.log("");
       } catch (err) {
+        // Recover stuck mid-flight states if something escaped processInput
+        if (
+          runtime.getState() === "UNDERSTANDING" ||
+          runtime.getState() === "PLANNING" ||
+          runtime.getState() === "EXECUTING"
+        ) {
+          // processInput finally should already reset; defensive only
+        }
         const message = err instanceof Error ? err.message : String(err);
         console.log(`Sophie > Une erreur est survenue. (${message.slice(0, 120)})`);
         console.log("");

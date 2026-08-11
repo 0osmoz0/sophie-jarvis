@@ -1,9 +1,9 @@
-## Phase 1 → Phase 20
+## Phase 1 → Phase 21
 
-- **Phase 1–19** : Core → … → Natural Response
-- **Phase 20** : Pipeline Consolidation & Low-Latency (`0.20.0`) — COMPLETE
+- **Phase 1–20** : Core → … → Pipeline Consolidation
+- **Phase 21** : Production Hardening & Observability (`0.21.0`) — COMPLETE
 
-Voir `docs/JARVIS_PIPELINE.md`.
+Voir `docs/JARVIS_OBSERVABILITY.md`.
 
 ## Démarrage rapide
 
@@ -12,16 +12,18 @@ npm install
 npm run build:native   # optionnel, darwin + Xcode
 npm run jarvis
 npm run jarvis -- --timing
+npm run jarvis -- --trace
+npm run jarvis -- --metrics
 ```
 
 ## Validation
 
 ```bash
 npx tsc --noEmit
-npm run preaudit:pipeline
-npm run audit:pipeline
-npm run audit:pipeline-security
-npm run sim:pipeline
-npm run audit:llm-perf
-JARVIS_LLM_PROVIDER=mock npm run bench:interaction
+npm run preaudit:production
+npm run audit:observability-security
+npm run audit:observability-privacy
+npm run test:failure-matrix
+npm run sim:chaos
+npm run sim:long-session
 ```

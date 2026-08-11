@@ -16,7 +16,7 @@ export type { PendingConfirmation } from "./ConversationContext.js";
 
 export { ResponseFormatter } from "./ResponseFormatter.js";
 export { MemoryRuntimeAuditLog } from "./RuntimeAudit.js";
-export { JarvisRuntime, formatTiming, formatPipelineTiming, classifyLatency } from "./JarvisRuntime.js";
+export { JarvisRuntime, formatTiming, formatPipelineTiming, classifyLatency, formatPipelineTrace } from "./JarvisRuntime.js";
 export type {
   JarvisRuntimeOptions,
   ProcessInputResult,
@@ -27,3 +27,4 @@ export type {
   LatencyClass,
 } from "./RequestPipelineContext.js";
 export { emptyPipelineTiming } from "./RequestPipelineContext.js";
+export type { PipelineTraceSnapshot } from "../observability/index.js";

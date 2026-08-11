@@ -41,7 +41,7 @@ ActionExecutor only after confirm (unchanged)
 RESPONSE
 --------
 ResponseGenerator.naturalize once per narrated branch
-responseGenerationMs: 0
+responseGenerationMs: 1
 
 TOTAL
 -----

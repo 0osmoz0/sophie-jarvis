@@ -1,6 +1,6 @@
 {
   "name": "sophie-jarvis",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "description": "JARVIS Core — modular, permissioned tool execution foundation",
   "private": true,
   "type": "module",
@@ -62,7 +62,13 @@
     "audit:pipeline-security": "tsx tools/jarvis-pipeline-security-audit.ts",
     "sim:pipeline": "tsx tools/jarvis-pipeline-simulation.ts",
     "audit:llm-perf": "tsx tools/jarvis-llm-performance-audit.ts",
-    "bench:interaction": "tsx tools/jarvis-interaction-benchmark.ts"
+    "bench:interaction": "tsx tools/jarvis-interaction-benchmark.ts",
+    "preaudit:production": "tsx tools/jarvis-production-preaudit.ts",
+    "audit:observability-security": "tsx tools/jarvis-observability-security-audit.ts",
+    "audit:observability-privacy": "tsx tools/jarvis-observability-privacy-audit.ts",
+    "test:failure-matrix": "tsx tools/jarvis-failure-matrix.ts",
+    "sim:chaos": "tsx tools/jarvis-chaos-simulation.ts",
+    "sim:long-session": "tsx tools/jarvis-long-session-simulation.ts"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",

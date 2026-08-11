@@ -1,0 +1,171 @@
+=== JARVIS PRODUCTION HARDENING REPORT ===
+
+VERSION
+-------
+0.21.0
+
+PRE-AUDIT
+---------
+tools/jarvis-production-preaudit.ts
+tools/.audit-cache/jarvis-observability-phase21-preaudit.txt
+STATUS: COMPLETE (read-only)
+
+State ownership mapped:
+  runtime FSM, conversation, confirmation, memory, decision,
+  response, timing, error presentation, observability (passive)
+
+PIPELINE
+--------
+understand: ×1 per new intent (Phase 20 invariant preserved; traced)
+decision:   ×1 per new intent (traced)
+planning:   planFromOutcome (no LLM); traced when planningMs set
+permission: unchanged Phase 8; WAITING status in trace on confirm issue
+confirmation: single-use token; expire / invalidate / duplicate rejected
+execution:  only after confirm; traced
+response:   ×1 narrated path; FALLBACK status when deterministic
+
+TRACE
+-----
+requestId: ix_<uuid> per processInput
+stages: INPUT, CONVERSATION, REFERENCE, UNDERSTAND, VALIDATION,
+        DECISION, PLANNING, PERMISSION, CONFIRMATION, EXECUTION,
+        RESPONSE, COMPLETE, ERROR
+missing stages: permissionMs often null (not invented as 0);
+  validationMs not separately timed in IntentRouter (null OK)
+
+CLI: npm run jarvis -- --trace | --metrics | --timing
+
+ERROR HANDLING
+--------------
+JarvisError taxonomy (src/observability/JarvisError.ts):
+  LLM_UNAVAILABLE, LLM_TIMEOUT, LLM_INVALID_RESPONSE,
+  VALIDATION_FAILED, REFERENCE_AMBIGUOUS, DECISION_REFUSED,
+  PLANNING_FAILED, PERMISSION_DENIED, CONFIRMATION_EXPIRED,
+  CONFIRMATION_INVALID, EXECUTION_FAILED, CONTEXT_UNAVAILABLE,
+  MEMORY_UNAVAILABLE, RESPONSE_FAILED, INTERNAL_ERROR,
+  CONCURRENT_REQUEST
+User-facing: no stack traces; sanitize redacts password/apiKey/token
+
+RECOVERY
+--------
+processInput try/finally:
+  UNDERSTANDING | PLANNING | EXECUTING → IDLE on abandon
+WAITING_CONFIRMATION preserved until oui/non/expire/new command
+ERROR remapped to IDLE after finish (no durable stuck ERROR)
+INTERNAL_ERROR catch path clears pending + returns safe message
+
+IDEMPOTENCE
+-----------
+oui → execute once
+oui oui → second rejected (NO_PENDING / already consumed)
+ouvre Safari → oui → oui → second rejected
+ouvre Safari → ouvre Chrome → oui confirms latest only;
+  subsequent oui rejected
+UNE autorisation → UNE exécution maximum (verified failure-matrix)
+
+CONCURRENCY
+-----------
+Single in-flight processInput per JarvisRuntime instance
+Second overlapping call → CONCURRENT_REQUEST (no state contamination)
+Chaos sim observed concurrentRejected events
+No complex parallel executor introduced
+
+LONG SESSION
+------------
+MODE: SIMULATION
+Checkpoints 10 / 100 / 500 / 1000 / 5000 / 10000:
+  store ≤ 200, windowMessages ≤ 12, audit ≤ 1000, traces ≤ 500
+All checkpoints bounded
+
+RESTART
+-------
+MUST survive: persistent memory when JsonMemoryPersistence configured
+MUST disappear: pending confirmation, tokens, in-flight request,
+  UNDERSTANDING/PLANNING/EXECUTING, active requestId
+Test: WAITING_CONFIRMATION → new runtime → oui → NOT executed
+
+LLM RELIABILITY
+---------------
+Failure matrix:
+  unavailable / timeout / invalid JSON → error, no action
+  forbidden confirmationGranted field → reject
+  response LLM down → deterministic fallback
+  validator rejects invented action claims
+
+RESPONSE RELIABILITY
+--------------------
+ResponsePolicy → Generator → Validator → fallback
+No "c'est fait" without ACTION_RESULT success facts
+Context unavailable → honest error (not invented apps)
+
+OBSERVABILITY
+-------------
+src/observability/* passive only
+PipelineTraceCollector + PipelineMetrics + ObservabilityAuditLog
+Metadata only; ObservabilityPolicy strips secrets
+
+PERFORMANCE
+-----------
+Mock path remains FAST (sub-ms to few ms)
+Ollama not required for Phase 21 hardening tests
+Counters/latencies only when measured (null when unavailable)
+
+SIMULATION
+----------
+MODE: SIMULATION
+chaos: 5000 scenarios (timeouts, unavailable, invalid, injection,
+  stale oui, concurrent, restart)
+long-session: 10000 turns bounded
+Do NOT treat as real production incidents
+
+SECURITY AUDIT
+--------------
+tools/jarvis-observability-security-audit.ts: CLEAN
+No ActionExecutor / PermissionManager / shell / fetch / camera / mic
+in src/observability
+
+PRIVACY AUDIT
+-------------
+tools/jarvis-observability-privacy-audit.ts: CLEAN
+No message.content / memory.content / clipboard / keystrokes /
+  screenshots / file contents in observability logs
+
+REGRESSION
+----------
+npx tsc --noEmit OK
+Phases 1–19 smokes OK
+Phase 20 pipeline tools OK
+Phase 21 tools OK (preaudit, security, privacy, failure-matrix,
+  chaos, long-session)
+
+KNOWN LIMITATIONS
+-----------------
+- permissionMs / validationMs often null (honest unavailable)
+- Concurrent guard is per-runtime instance (not multi-process lock)
+- No AbortSignal for in-flight Ollama calls yet
+- Metrics reset when runtime instance replaced (restart sim)
+
+ROOT CAUSES
+-----------
+Pre-21 stuck-state risk: throw mid UNDERSTANDING/EXECUTING
+  without finish → addressed by finally recovery
+Pre-21 observability gap: no requestId stage trail → PipelineTrace
+Confirmation reuse already blocked by Phase 8 consume; verified
+
+RECOMMENDATIONS
+---------------
+1. Keep observability passive forever
+2. When Ollama live: use --trace/--timing; never invent latencies
+3. Optional future: AbortSignal for LLM only (never cancel
+   authorized execution arbitrarily)
+4. Wire ContextService in production CLI for context Q&A honesty
+
+PHASE 21 STATUS
+---------------
+COMPLETE
+
+PHASE 22
+--------
+NOT STARTED
+
+STOP.
