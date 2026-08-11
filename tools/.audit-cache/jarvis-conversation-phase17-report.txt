@@ -1,0 +1,201 @@
+JARVIS CONVERSATIONAL INTELLIGENCE — PHASE 17 REPORT
+====================================================
+
+VERSION:
+0.17.0
+
+PRE-AUDIT
+---------
+=== PHASE 17 PRE-AUDIT ===
+
+Current conversation state:
+  JarvisRuntime FSM + ConversationContext (PendingConfirmation + last exchange).
+  pendingForgetQuery for Phase 16 forget oui/non.
+
+Current history:
+  No multi-turn message log. lastUserText was never persisted (always "").
+
+Current context window:
+  LLMUnderstandRequest = { text } only. Ollama: system + single user turn.
+
+Current memory retrieval:
+  MemoryService.recall exists; injected into ContextSnapshot in CLI, not into LLM understand.
+
+Current reference resolution:
+  None — "ferme-le" → needs_clarification.
+
+Current clarification handling:
+  needs_clarification → IDLE; no slot follow-up state.
+
+Current confirmation context:
+  ActionConfirmation token (taskId + actionType + payloadHash + expiry).
+
+Current limitations:
+  Stateless LLM turns; no anaphora; conversation ≠ memory not enforced by a module.
+
+What can already be reused:
+  Runtime, IntentRouter/Validator, MemoryService.recall, ContextService,
+  ActionConfirmation, ConversationContext pending, isAffirmative/isNegative.
+
+What must be added:
+  ConversationStore/Window/Summary/ReferenceResolver/EntityTracker + LLM extras.
+
+What must NOT be duplicated:
+  ActionConfirmation, MemoryStore, ContextSnapshot, SophieSignalMemory,
+  SecurityBaseline, Phase 1 Context demo.
+
+CONVERSATION MODEL
+------------------
+src/conversation/types.ts — ConversationMessage, Reference, Entity, Summary,
+WindowBudget, priority list CONVERSATION_PRIORITY.
+
+CONVERSATION STORE
+------------------
+ConversationStore + InMemoryConversationStore (bounded, local, clearable).
+Independent from MemoryStore.
+
+CONTEXT WINDOW
+--------------
+ConversationWindow — maxMessages=12, maxCharacters=3000, maxTokens≈750.
+Never sends full history to LLM.
+
+SUMMARY
+-------
+ConversationSummarizer — compresses older turns; not promoted to long-term memory.
+Simulation summaryCount=89 over 5000 messages.
+
+REFERENCE RESOLUTION
+--------------------
+ReferenceResolver + applyResolvedReference.
+resolved / ambiguous / unresolved; ambiguous → mandatory clarification.
+Pipeline: ReferenceResolver → IntentRouter → Validator → Planner → Risk →
+Permission → Confirmation → Executor. Resolution ≠ authorization.
+
+ENTITY TRACKING
+---------------
+EntityTracker (max 32) — applications/files/projects/… conversational only.
+
+MEMORY INTEGRATION
+------------------
+Budgeted recall on memory-like questions when no resolved reference.
+Priority: explicit message > conversation ref > environment > memory > LLM.
+
+ENVIRONMENT INTEGRATION
+-----------------------
+Optional ContextSnapshot applications when deixis / “application ouverte”.
+Multiple open apps → clarification.
+
+CLARIFICATION
+-------------
+Early clarification from ReferenceResolver; LLM needs_clarification retained.
+Ambiguous dual apps: “Tu parles de X ou de Y ?”
+
+CONFIRMATION SAFETY
+-------------------
+Follow-ups oui/non/fais-le/annule still require ActionConfirmation token.
+“Tu as déjà confirmé” does not execute. New command invalidates pending.
+Expired confirmation rejected. Conversation cannot replace token.
+
+LLM CONTRACT
+------------
+LLMUnderstandRequest carries conversation/references/memory/environment as DATA.
+Ollama packs structured JSON user content.
+IntentValidator rejects execute / shell / command / permissionGranted /
+confirmationGranted; supports Phase 17 { intent, entities, needsClarification }
+normalized to { type, payload }.
+
+SECURITY
+--------
+Injection-like prompts → no_action / reject.
+Prior conversation treated as DATA.
+conversation audit + security audit clean.
+security-invariants allowlist updated for Phase 17 scanners/docs.
+
+PRIVACY
+-------
+Runtime audit: messageId, role, intent, latency, status — not message.content.
+Conversation not auto-written to long-term memory.
+
+PERFORMANCE
+-----------
+Measured (SIMULATION, synthetic):
+  averageLatencyMs ≈ 0.017
+  p95LatencyMs ≈ 0.029
+  maxLatencyMs ≈ 2.5
+  Window stays bounded (~200 avg chars selected)
+Scale checkpoints 10/100/500/1000/5000 — latency does not grow with history
+(store capped + window budget).
+
+No fictional SLA announced.
+
+SIMULATION
+----------
+MODE: SIMULATION
+messages: 5000
+referenceResolutionRate ≈ 0.375
+clarificationRate ≈ 0.083
+summaryCount: 89
+memoryRetrievalCount: 750
+avgContextWindowChars ≈ 199
+
+TESTS
+-----
+jarvis-conversation-smoke.ts — 22/22 passed
+jarvis-conversation-audit.ts — PASSED
+jarvis-conversation-security-audit.ts — PASSED
+jarvis-conversation-simulation.ts — SIMULATION completed
+
+REGRESSION
+----------
+npx tsc --noEmit — OK
+Phases 1–16 smokes + memory audit — green
+jarvis-core-smoke security invariants — green (after allowlists)
+
+LIMITATIONS
+-----------
+- Heuristic anaphora (not full NLU)
+- Extractive summary only (no dedicated summarizer LLM)
+- Double understand on action plan path (Phase 10 legacy)
+- No generic multi-slot dialogue state beyond refs/confirmation
+- No new system actions / Sophie BehaviorBrain / camera / shell / UI automation
+
+FILES CREATED
+-------------
+src/conversation/types.ts
+src/conversation/ConversationStore.ts
+src/conversation/InMemoryConversationStore.ts
+src/conversation/ConversationWindow.ts
+src/conversation/ConversationSummary.ts
+src/conversation/EntityTracker.ts
+src/conversation/ReferenceResolver.ts
+src/conversation/ConversationService.ts
+src/conversation/index.ts
+docs/JARVIS_CONVERSATION.md
+tools/jarvis-conversation-smoke.ts
+tools/jarvis-conversation-audit.ts
+tools/jarvis-conversation-security-audit.ts
+tools/jarvis-conversation-simulation.ts
+tools/.audit-cache/jarvis-conversation-phase17-report.txt
+
+FILES MODIFIED
+--------------
+package.json (0.17.0 + scripts)
+README.md
+src/ai/types.ts
+src/ai/IntentRouter.ts
+src/ai/IntentValidator.ts
+src/ai/MockLLMProvider.ts
+src/ai/OllamaLLMProvider.ts
+src/ai/index.ts
+src/runtime/JarvisRuntime.ts
+src/runtime/ConversationContext.ts
+src/runtime/types.ts
+tools/security-invariants.ts
+
+PHASE 17 STATUS:
+COMPLETE
+
+PHASE 18:
+NOT STARTED
+
+STOP.

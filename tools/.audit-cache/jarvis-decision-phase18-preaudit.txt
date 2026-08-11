@@ -1,0 +1,60 @@
+=== PHASE 18 PRE-AUDIT ===
+VERSION: 0.18.0
+Scanned files: 77
+
+Where decisions are currently made:
+  - JarvisRuntime.processInput / handleNewIntent (dispatch by outcome.kind)
+  - IntentRouter.classifyIntent
+  - IntentValidator (accept/reject LLM candidate)
+  - ConversationService.prepareTurn (early clarification)
+  - ReferenceResolver (resolved/ambiguous/unresolved)
+  - ActionPlanner + ActionPermissionPolicy + PermissionManager
+  - ActionConfirmation (token issue/validate/consume)
+
+Where LLM influences behavior:
+  - LLMProvider.understand → structured intent only
+  - Never PermissionManager / ActionExecutor / confirmation tokens
+
+Where context is used:
+  - ContextService.getSnapshot (read-only)
+  - loadEnvironmentHints for ReferenceResolver
+
+Where memory is used:
+  - MemoryService.recall in ConversationService (budgeted)
+  - handleMemoryIntent (inform only)
+
+Where ambiguities are handled:
+  - ReferenceResolver earlyClarification
+  - intent needs_clarification
+
+Where actions are refused:
+  - IntentValidator FORBIDDEN fields
+  - PermissionManager CRITICAL deny
+  - Domain FilePolicy / ApplicationPolicy
+
+Where confirmations intervene:
+  - ActionConfirmation + ConversationContext.pending
+  - memory.forget pendingForgetQuery (separate)
+
+Possible duplications:
+  - Double understand on action path (understand + planFromText)
+  - Dual clarification channels (resolver vs LLM)
+
+Currently implicit decisions:
+  - Always request confirmation for planned actions in runtime
+  - New command invalidates pending
+  - Priority sources partially in prepareTurn, not centralized
+
+What DecisionEngine should own:
+  - Explicit Decision { type, confidence, evidence, missing }
+  - Gate ACTION vs CLARIFICATION vs ANSWER vs REFUSAL vs NO_ACTION
+  - Contradiction detection (user correction vs stale memory)
+  - Explanation + audit (no secrets)
+
+What must NOT be duplicated/changed:
+  - PermissionManager, ActionPermissionPolicy
+  - ActionConfirmation, ActionPlanner, ActionExecutor
+  - BehaviorBrain (absent — must stay absent)
+  - IntentValidator core forbidden rules
+
+PRE-AUDIT STATUS: COMPLETE (read-only)

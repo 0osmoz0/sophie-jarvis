@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { ActionService } from "../actions/ActionService.js";
 import type { IntentRouter } from "../ai/IntentRouter.js";
+import type { LLMUnderstandRequest } from "../ai/types.js";
 import type { ContextService } from "../context/ContextService.js";
 import type { ContextQueryKind } from "../context/types.js";
 import { ContextFormatter } from "../context/ContextFormatter.js";
@@ -9,6 +10,15 @@ import type { SophieEmitResult } from "../integration/types.js";
 import type { SecurityService } from "../security/SecurityService.js";
 import type { SecurityMonitor } from "../security/SecurityMonitor.js";
 import type { MemoryService } from "../memory/MemoryService.js";
+import {
+  ConversationService,
+  type ConversationTiming,
+} from "../conversation/index.js";
+import {
+  DecisionEngine,
+  DecisionExplanation,
+  type Decision,
+} from "../decision/index.js";
 import type { JarvisSecurityIntentType, JarvisMemoryIntentType } from "../ai/types.js";
 import {
   contextSnapshotToSecurityObservation,
@@ -46,6 +56,10 @@ export interface JarvisRuntimeOptions {
   securityMonitor?: SecurityMonitor;
   /** Optional Phase 16 long-term memory (inform only). */
   memoryService?: MemoryService;
+  /** Optional Phase 17 multi-turn conversation (≠ memory). */
+  conversationService?: ConversationService;
+  /** Optional Phase 18 decision engine (evaluates; never executes). */
+  decisionEngine?: DecisionEngine;
   formatter?: ResponseFormatter;
   context?: ConversationContext;
   audit?: RuntimeAuditSink;
@@ -72,6 +86,9 @@ export class JarvisRuntime {
   private readonly securityService: SecurityService | undefined;
   private readonly securityMonitor: SecurityMonitor | undefined;
   private readonly memoryService: MemoryService | undefined;
+  private readonly conversation: ConversationService;
+  private readonly decisionEngine: DecisionEngine;
+  private lastDecision: Decision | null = null;
   private readonly contextFormatter = new ContextFormatter();
   private pendingForgetQuery: string | null = null;
   private readonly formatter: ResponseFormatter;
@@ -79,6 +96,7 @@ export class JarvisRuntime {
   private readonly audit: RuntimeAuditSink;
   private readonly now: () => number;
   private state: RuntimeState = "IDLE";
+  private lastUserMessageId: string | null = null;
 
   constructor(options: JarvisRuntimeOptions) {
     this.router = options.router;
@@ -92,10 +110,38 @@ export class JarvisRuntime {
     this.context = options.context ?? new ConversationContext();
     this.audit = options.audit ?? new MemoryRuntimeAuditLog();
     this.now = options.now ?? (() => Date.now());
+    this.conversation =
+      options.conversationService ??
+      new ConversationService({
+        memoryService: options.memoryService,
+        now: this.now,
+      });
+    this.decisionEngine =
+      options.decisionEngine ??
+      new DecisionEngine({
+        now: this.now,
+      });
+  }
+
+  getDecisionEngine(): DecisionEngine {
+    return this.decisionEngine;
+  }
+
+  getLastDecision(): Decision | null {
+    return this.lastDecision;
+  }
+
+  explainLastDecision(): string | null {
+    if (!this.lastDecision) return null;
+    return new DecisionExplanation().format(this.lastDecision);
   }
 
   getState(): RuntimeState {
     return this.state;
+  }
+
+  getConversationService(): ConversationService {
+    return this.conversation;
   }
 
   getContext(): ConversationContext {
@@ -133,6 +179,8 @@ export class JarvisRuntime {
       confirmationMs: null,
       executionMs: null,
       totalMs: 0,
+      conversationMs: null,
+      decisionMs: null,
     };
 
     if (typeof input !== "string" || !input.trim()) {
@@ -215,9 +263,11 @@ export class JarvisRuntime {
       }
 
       if (isAffirmative(text)) {
+        this.recordFollowUpUser(text);
         return this.handleConfirmYes(interactionId, timing, totalStart);
       }
       if (isNegative(text)) {
+        this.recordFollowUpUser(text);
         return this.handleConfirmNo(interactionId, timing, totalStart);
       }
 
@@ -228,6 +278,7 @@ export class JarvisRuntime {
 
     // Lone oui/non without pending confirmation
     if (isAffirmative(text) || isNegative(text)) {
+      this.recordFollowUpUser(text);
       return this.finish(
         interactionId,
         this.formatter.noPendingConfirmation(),
@@ -240,6 +291,11 @@ export class JarvisRuntime {
     }
 
     return this.handleNewIntent(text, interactionId, timing, totalStart);
+  }
+
+  private recordFollowUpUser(text: string): void {
+    const msg = this.conversation.append("user", text);
+    this.lastUserMessageId = msg.id;
   }
 
   private async handleContextIntent(
@@ -715,69 +771,39 @@ export class JarvisRuntime {
     totalStart: number,
   ): Promise<ProcessInputResult> {
     this.state = "UNDERSTANDING";
-    const llmStart = this.now();
-    const outcome = await this.router.understand(text);
-    timing.llmMs = this.now() - llmStart;
 
-    if (outcome.kind === "provider_error") {
-      const resp =
-        outcome.status === "UNAVAILABLE" || outcome.status === "TIMEOUT"
-          ? this.formatter.llmUnavailable(outcome.message)
-          : this.formatter.error(outcome.status, outcome.message);
+    const environment = await this.loadEnvironmentHints(text);
+    const prepared = await this.conversation.prepareTurn(text, environment);
+    timing.conversationMs = prepared.timing.totalConversationMs;
+    this.lastUserMessageId = prepared.userMessage.id;
+
+    if (prepared.earlyClarification) {
+      const earlyOutcome = {
+        kind: "needs_clarification" as const,
+        intent: {
+          type: "needs_clarification" as const,
+          payload: { question: prepared.earlyClarification },
+        },
+      };
+      const decided = this.decisionEngine.evaluate({
+        userText: text,
+        effectiveText: prepared.effectiveText,
+        outcome: earlyOutcome,
+        referenceResult: prepared.bundle.referenceResult,
+        environment,
+        memoryUsed: prepared.bundle.memoryHints.length > 0,
+        contextUsed: Boolean(environment),
+        memoryPreferenceHints: prepared.bundle.memoryHints.map((m) => m.content.slice(0, 80)),
+      });
+      timing.decisionMs = decided.timing.totalDecisionMs;
+      this.lastDecision = decided.decision;
+      this.conversation.noteClarification();
       return this.finish(
         interactionId,
-        resp,
-        "ERROR",
-        timing,
-        totalStart,
-        null,
-        outcome.status,
-      );
-    }
-
-    if (outcome.kind === "rejected") {
-      return this.finish(
-        interactionId,
-        this.formatter.error(outcome.code, outcome.message),
-        "ERROR",
-        timing,
-        totalStart,
-        null,
-        outcome.code,
-      );
-    }
-
-    if (outcome.kind === "conversation") {
-      const resp = /^(bonjour|salut|hello|hi)\b/i.test(text)
-        ? this.formatter.greeting()
-        : this.formatter.conversation(outcome.intent.payload.replyHint);
-      return this.finish(
-        interactionId,
-        resp,
-        "IDLE",
-        timing,
-        totalStart,
-        "conversation",
-        "OK",
-      );
-    }
-
-    if (outcome.kind === "no_action") {
-      return this.finish(
-        interactionId,
-        this.formatter.noAction(outcome.intent.payload.reason),
-        "IDLE",
-        timing,
-        totalStart,
-        "no_action",
-        "NO_ACTION",
-      );
-    }
-
-    if (outcome.kind === "needs_clarification") {
-      return this.finish(
-        interactionId,
-        this.formatter.clarification(outcome.intent.payload.question),
+        this.formatter.clarification(
+          decided.decision.clarificationQuestion ??
+            prepared.earlyClarification,
+        ),
         "IDLE",
         timing,
         totalStart,
@@ -786,37 +812,185 @@ export class JarvisRuntime {
       );
     }
 
-    if (outcome.kind === "context") {
-      return this.handleContextIntent(
-        outcome.intent.type as ContextQueryKind,
+    const requestExtras = toLlmExtras(prepared.bundle);
+    const effectiveText = prepared.effectiveText;
+
+    const llmStart = this.now();
+    const outcome = await this.router.understand(effectiveText, requestExtras);
+    timing.llmMs = this.now() - llmStart;
+
+    const decided = this.decisionEngine.evaluate({
+      userText: text,
+      effectiveText,
+      outcome,
+      referenceResult: prepared.bundle.referenceResult,
+      environment,
+      memoryUsed: prepared.bundle.memoryHints.length > 0,
+      contextUsed: Boolean(environment),
+      memoryPreferenceHints: prepared.bundle.memoryHints.map((m) =>
+        m.content.slice(0, 80),
+      ),
+      securityLevel:
+        outcome.kind === "security" ? outcome.intent.type : null,
+    });
+    timing.decisionMs = decided.timing.totalDecisionMs;
+    this.lastDecision = decided.decision;
+    const decision = decided.decision;
+
+    if (decision.type === "DEFER" || outcome.kind === "provider_error") {
+      if (outcome.kind === "provider_error") {
+        const resp =
+          outcome.status === "UNAVAILABLE" || outcome.status === "TIMEOUT"
+            ? this.formatter.llmUnavailable(outcome.message)
+            : this.formatter.error(outcome.status, outcome.message);
+        return this.finish(
+          interactionId,
+          resp,
+          "ERROR",
+          timing,
+          totalStart,
+          null,
+          outcome.status,
+        );
+      }
+      return this.finish(
         interactionId,
+        this.formatter.unavailable(decision.messageHint ?? "Différé."),
+        "ERROR",
         timing,
         totalStart,
+        decision.sourceIntentKind ?? null,
+        "DEFER",
       );
     }
 
-    if (outcome.kind === "security") {
-      return this.handleSecurityIntent(
-        outcome.intent.type,
+    if (decision.type === "REFUSAL" || outcome.kind === "rejected") {
+      const code =
+        outcome.kind === "rejected" ? outcome.code : "REFUSAL";
+      const message =
+        decision.messageHint ??
+        (outcome.kind === "rejected" ? outcome.message : "Refusé.");
+      return this.finish(
         interactionId,
+        this.formatter.error(code, message),
+        "ERROR",
         timing,
         totalStart,
+        null,
+        code,
       );
     }
 
-    if (outcome.kind === "memory") {
-      return this.handleMemoryIntent(
-        outcome.intent,
+    if (
+      decision.type === "CLARIFICATION" ||
+      decision.type === "INFORMATION_REQUIRED"
+    ) {
+      this.conversation.noteClarification();
+      return this.finish(
         interactionId,
+        this.formatter.clarification(
+          decision.clarificationQuestion ??
+            decision.messageHint ??
+            "Précise la cible.",
+        ),
+        "IDLE",
         timing,
         totalStart,
+        "needs_clarification",
+        decision.type,
       );
     }
+
+    if (decision.type === "ANSWER") {
+      if (outcome.kind === "context") {
+        return this.handleContextIntent(
+          outcome.intent.type as ContextQueryKind,
+          interactionId,
+          timing,
+          totalStart,
+        );
+      }
+      if (outcome.kind === "security") {
+        return this.handleSecurityIntent(
+          outcome.intent.type,
+          interactionId,
+          timing,
+          totalStart,
+        );
+      }
+      if (outcome.kind === "memory") {
+        return this.handleMemoryIntent(
+          outcome.intent,
+          interactionId,
+          timing,
+          totalStart,
+        );
+      }
+      if (outcome.kind === "conversation") {
+        const resp = /^(bonjour|salut|hello|hi)\b/i.test(text)
+          ? this.formatter.greeting()
+          : this.formatter.conversation(
+              outcome.intent.payload.replyHint ?? decision.messageHint,
+            );
+        return this.finish(
+          interactionId,
+          resp,
+          "IDLE",
+          timing,
+          totalStart,
+          "conversation",
+          "OK",
+        );
+      }
+      return this.finish(
+        interactionId,
+        this.formatter.conversation(decision.messageHint),
+        "IDLE",
+        timing,
+        totalStart,
+        decision.sourceIntentKind ?? "conversation",
+        "OK",
+      );
+    }
+
+    if (decision.type === "NO_ACTION") {
+      return this.finish(
+        interactionId,
+        this.formatter.noAction(decision.messageHint),
+        "IDLE",
+        timing,
+        totalStart,
+        "no_action",
+        "NO_ACTION",
+      );
+    }
+
+    // ACTION only — still must pass ActionPlanner / Permission / Confirmation
+    if (decision.type !== "ACTION" || outcome.kind !== "action") {
+      return this.finish(
+        interactionId,
+        this.formatter.noAction("Aucune action décidée."),
+        "IDLE",
+        timing,
+        totalStart,
+        "no_action",
+        "NO_ACTION",
+      );
+    }
+
+    // Track entities from understood action intent (info only — not authorization)
+    this.conversation.trackFromIntent(
+      outcome.intent.type,
+      outcome.intent.payload as Record<string, unknown>,
+      prepared.userMessage.id,
+    );
 
     // Action → plan + confirmation (never execute here)
     this.state = "PLANNING";
     const planStart = this.now();
-    const planned = await this.router.planFromText(text);
+    const planned = await this.router.planFromText(effectiveText, {
+      requestExtras,
+    });
     timing.planningMs = this.now() - planStart;
 
     if (!planned.ok) {
@@ -889,7 +1063,10 @@ export class JarvisRuntime {
       }
       return this.finish(
         interactionId,
-        this.formatter.error(code, issued.error?.message ?? "Confirmation impossible"),
+        this.formatter.error(
+          code,
+          issued.error?.message ?? "Confirmation impossible",
+        ),
         "ERROR",
         timing,
         totalStart,
@@ -925,6 +1102,35 @@ export class JarvisRuntime {
     );
   }
 
+  private async loadEnvironmentHints(text: string): Promise<
+    | {
+        activeApplication?: string | null;
+        openApplications?: string[];
+      }
+    | undefined
+  > {
+    if (!this.contextService) return undefined;
+    const needsEnv =
+      /application ouverte|qu['']est[- ]ce qui est ouvert|ferme[- ]le|ouvre[- ]le/i.test(
+        text,
+      );
+    if (!needsEnv) return undefined;
+    try {
+      const snap = await this.contextService.getSnapshot("application.status");
+      const active = snap.snapshot.applications?.active?.name ?? null;
+      const open =
+        snap.snapshot.applications?.running
+          ?.map((a) => a.name)
+          .filter((n): n is string => Boolean(n)) ?? [];
+      return {
+        activeApplication: active,
+        openApplications: open,
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
   private finish(
     interactionId: string,
     response: JarvisResponse,
@@ -939,7 +1145,6 @@ export class JarvisRuntime {
     timing.totalMs = Math.max(0, this.now() - totalStart);
 
     const previousState = this.state;
-    // Persist waiting; otherwise return to IDLE after terminal outcomes.
     if (nextState === "WAITING_CONFIRMATION") {
       this.state = "WAITING_CONFIRMATION";
     } else if (
@@ -957,9 +1162,18 @@ export class JarvisRuntime {
     }
 
     const pending = this.context.getPending();
+    const cliText = this.formatter.formatCli(response);
+    this.conversation.appendAssistant(cliText, {
+      intentType: intentType ?? undefined,
+      status: resultCode ?? undefined,
+    });
+    this.context.setLastExchange(this.lastUserMessageId ?? "", cliText);
+
     this.audit.append({
       timestamp: new Date(this.now()).toISOString(),
       interactionId,
+      messageId: this.lastUserMessageId,
+      role: "user",
       intentType,
       planStatus:
         pending?.plan.status ??
@@ -980,8 +1194,6 @@ export class JarvisRuntime {
       state: this.state,
     });
 
-    this.context.setLastExchange("", this.formatter.formatCli(response));
-
     return {
       response,
       state: this.state,
@@ -991,10 +1203,38 @@ export class JarvisRuntime {
   }
 }
 
+function toLlmExtras(
+  bundle: import("../conversation/index.js").ConversationUnderstandBundle,
+): Omit<LLMUnderstandRequest, "text"> {
+  return {
+    conversation: bundle.messages.map((m) => ({
+      role: m.role,
+      content: m.content,
+    })),
+    conversationSummary: bundle.summary?.text ?? null,
+    references: bundle.references.map((r) => ({
+      label: r.label ?? "",
+      entityType: r.entityType,
+      confidence: r.confidence,
+    })),
+    memory: bundle.memoryHints.map((m) => ({
+      kind: m.kind,
+      content: m.content,
+    })),
+    environment: bundle.environment,
+  };
+}
+
 export function formatTiming(timing: InteractionTiming): string {
   const lines = ["Interaction", "────────────────────────"];
+  if (timing.conversationMs != null) {
+    lines.push(`Conversation  ${(timing.conversationMs / 1000).toFixed(2)}s`);
+  }
   if (timing.llmMs !== null) {
     lines.push(`LLM          ${(timing.llmMs / 1000).toFixed(2)}s`);
+  }
+  if (timing.decisionMs != null) {
+    lines.push(`Decision     ${timing.decisionMs}ms`);
   }
   if (timing.validationMs !== null) {
     lines.push(`Validation   ${timing.validationMs}ms`);
@@ -1011,3 +1251,5 @@ export function formatTiming(timing: InteractionTiming): string {
   lines.push(`Total        ${(timing.totalMs / 1000).toFixed(2)}s`);
   return lines.join("\n");
 }
+
+export type { ConversationTiming };

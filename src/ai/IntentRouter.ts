@@ -9,6 +9,7 @@ import type {
   JarvisSecurityIntentType,
   JarvisMemoryIntentType,
   JarvisIntent,
+  LLMUnderstandRequest,
 } from "./types.js";
 import {
   AI_ERROR_CODES,
@@ -40,7 +41,10 @@ export class IntentRouter {
     this.actions = options.actions;
   }
 
-  async understand(text: string): Promise<IntentRouterOutcome> {
+  async understand(
+    text: string,
+    requestExtras?: Omit<LLMUnderstandRequest, "text">,
+  ): Promise<IntentRouterOutcome> {
     if (typeof text !== "string") {
       return {
         kind: "rejected",
@@ -57,7 +61,10 @@ export class IntentRouter {
     }
 
     // No infinite retries — single understand call.
-    const llm = await this.provider.understand({ text });
+    const llm = await this.provider.understand({
+      text,
+      ...requestExtras,
+    });
     if (!llm.ok) {
       return {
         kind: "provider_error",
@@ -85,12 +92,15 @@ export class IntentRouter {
    */
   async planFromText(
     text: string,
-    options?: { dryRun?: boolean },
+    options?: {
+      dryRun?: boolean;
+      requestExtras?: Omit<LLMUnderstandRequest, "text">;
+    },
   ): Promise<
     | { ok: true; outcome: IntentRouterOutcome; plan?: ActionPlan }
     | { ok: false; outcome: IntentRouterOutcome; error: { code: string; message: string } }
   > {
-    const outcome = await this.understand(text);
+    const outcome = await this.understand(text, options?.requestExtras);
     if (outcome.kind !== "action") {
       return {
         ok: false,

@@ -1,6 +1,6 @@
 {
   "name": "sophie-jarvis",
-  "version": "0.16.0",
+  "version": "0.18.0",
   "description": "JARVIS Core — modular, permissioned tool execution foundation",
   "private": true,
   "type": "module",
@@ -42,7 +42,16 @@
     "sim:security-monitor": "tsx tools/jarvis-security-monitor-simulation.ts",
     "smoke:memory": "tsx tools/jarvis-memory-smoke.ts",
     "audit:memory": "tsx tools/jarvis-memory-audit.ts",
-    "sim:memory": "tsx tools/jarvis-memory-simulation.ts"
+    "sim:memory": "tsx tools/jarvis-memory-simulation.ts",
+    "smoke:conversation": "tsx tools/jarvis-conversation-smoke.ts",
+    "audit:conversation": "tsx tools/jarvis-conversation-audit.ts",
+    "audit:conversation-security": "tsx tools/jarvis-conversation-security-audit.ts",
+    "sim:conversation": "tsx tools/jarvis-conversation-simulation.ts",
+    "smoke:decision": "tsx tools/jarvis-decision-smoke.ts",
+    "audit:decision": "tsx tools/jarvis-decision-audit.ts",
+    "audit:decision-security": "tsx tools/jarvis-decision-security-audit.ts",
+    "sim:decision": "tsx tools/jarvis-decision-simulation.ts",
+    "preaudit:decision": "tsx tools/jarvis-decision-preaudit.ts"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",

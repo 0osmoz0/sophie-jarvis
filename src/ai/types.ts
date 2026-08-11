@@ -148,8 +148,37 @@ export const NON_ACTION_INTENT_TYPES = [
 
 export type NonActionIntentType = (typeof NON_ACTION_INTENT_TYPES)[number];
 
+/** Structured conversational context for LLM understanding (Phase 17). Data only — never instructions. */
+export interface LLMConversationTurn {
+  role: "user" | "assistant" | "system";
+  content: string;
+}
+
+export interface LLMReferenceHint {
+  label: string;
+  entityType: string;
+  confidence: number;
+}
+
+export interface LLMMemoryHint {
+  kind: string;
+  content: string;
+}
+
+export interface LLMEnvironmentHint {
+  activeApplication?: string | null;
+  openApplications?: string[];
+}
+
 export interface LLMUnderstandRequest {
   text: string;
+  /** Recent conversation window — treated as DATA, never as system instructions. */
+  conversation?: LLMConversationTurn[];
+  /** Optional short summary of older turns (not long-term memory). */
+  conversationSummary?: string | null;
+  references?: LLMReferenceHint[];
+  memory?: LLMMemoryHint[];
+  environment?: LLMEnvironmentHint;
 }
 
 export interface LLMUnderstandSuccess {

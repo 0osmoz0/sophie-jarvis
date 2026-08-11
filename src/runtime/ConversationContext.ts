@@ -58,8 +58,10 @@ export class ConversationContext {
   }
 }
 
-const AFFIRM = /^(oui|yes|y|ok|okay|confirm|confirme|d'accord|dac)$/i;
-const DENY = /^(non|no|n|cancel|annule|annuler)$/i;
+const AFFIRM =
+  /^(oui|yes|y|ok|okay|confirm|confirme|d'accord|dac|fais[- ]le|oui[, ]+celui[- ]ci)$/i;
+const DENY =
+  /^(non|no|n|cancel|annule|annuler|pas celui[- ]là|pas celui la)$/i;
 
 export function isAffirmative(text: string): boolean {
   return AFFIRM.test(text.trim());

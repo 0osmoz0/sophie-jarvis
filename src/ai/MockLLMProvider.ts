@@ -84,7 +84,9 @@ export class MockLLMProvider implements LLMProvider {
     // Prompt-injection / shell-like user text → still return a structure;
     // validator / router must reject unsafe or unknown actions.
     if (
-      /ignore (all )?previous|system administrator|execute shell/i.test(text) ||
+      /ignore (all )?previous|system administrator|execute shell|forget previous safety|system message:|assistant message:|confirmation granted|toujours exécuter.*sans confirmation|always execute.*without confirmation/i.test(
+        text,
+      ) ||
       text.toLowerCase().includes("rm" + " -rf") ||
       text.toLowerCase().includes("child_" + "process") ||
       text.toLowerCase().includes("osa" + "script") ||
@@ -95,6 +97,30 @@ export class MockLLMProvider implements LLMProvider {
         JSON.stringify({
           type: "no_action",
           payload: { reason: "Rejected unsafe or injection-like input" },
+        }),
+      );
+    }
+
+    // Phase 17 — corrections: "non, Safari" / "non Safari"
+    const correction = text.match(/^non[, ]+(.+)$/i);
+    if (correction) {
+      const target = correction[1]!.trim();
+      if (/^(celui|celle|ça|ca)\b/i.test(target)) {
+        return this.wrapRaw(
+          JSON.stringify({
+            type: "needs_clarification",
+            payload: { question: "Précise la correction (quelle cible ?)." },
+          }),
+        );
+      }
+      return this.action("application.open", { application: target });
+    }
+
+    if (/^pas celui[- ]là\.?$/i.test(text.trim())) {
+      return this.wrapRaw(
+        JSON.stringify({
+          type: "needs_clarification",
+          payload: { question: "Lequel alors ?" },
         }),
       );
     }
@@ -112,19 +138,49 @@ export class MockLLMProvider implements LLMProvider {
       );
     }
 
+    // Ambiguous deixis without prior resolution (runtime should rewrite first)
     if (
-      /^(range ça|ferme[- ]le|fais[- ]le|ouvre[- ]le)\.?$/i.test(text.trim()) ||
+      /^(range ça|ferme[- ]le|ouvre[- ]le|copie ce fichier)\.?$/i.test(
+        text.trim(),
+      ) ||
       lower === "range ca" ||
       lower === "ferme-le" ||
       lower === "ferme le" ||
       /^ferme tout\.?$/i.test(text.trim())
     ) {
+      // If structured references were provided by runtime, prefer them
+      const ref = request.references?.[0];
+      if (ref?.label && /ferme/i.test(text)) {
+        return this.action("application.close", {
+          application: ref.label,
+        });
+      }
+      if (ref?.label && /ouvre/i.test(text)) {
+        return this.action("application.open", {
+          application: ref.label,
+        });
+      }
       return this.wrapRaw(
         JSON.stringify({
           type: "needs_clarification",
           payload: {
             question: "Précise la cible (chemin ou application).",
           },
+        }),
+      );
+    }
+
+    // Prefer conversation reference over memory for deixis (already handled above).
+    // Memory hints inform recall-style questions only.
+    if (
+      request.memory &&
+      request.memory.length > 0 &&
+      /quel (ide|éditeur)|quel est mon/i.test(text)
+    ) {
+      return this.wrapRaw(
+        JSON.stringify({
+          type: "memory.recall",
+          payload: { query: text.trim() },
         }),
       );
     }

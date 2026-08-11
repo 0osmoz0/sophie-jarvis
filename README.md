@@ -1,9 +1,9 @@
-## Phase 1 → Phase 16
+## Phase 1 → Phase 18
 
-- **Phase 1–15** : Core → … → security monitor
-- **Phase 16** : mémoire long terme locale (informe seulement)
+- **Phase 1–17** : Core → … → conversation multi-tour
+- **Phase 18** : Decision & Reasoning Engine (`0.18.0`)
 
-Voir `docs/JARVIS_MEMORY.md`.
+Voir `docs/JARVIS_DECISION.md`.
 
 ## Démarrage rapide
 
@@ -17,7 +17,8 @@ npm run jarvis
 
 ```bash
 npx tsc --noEmit
-npm run smoke:memory
-npm run audit:memory
-npm run sim:memory
+npm run smoke:decision
+npm run audit:decision
+npm run audit:decision-security
+npm run sim:decision
 ```

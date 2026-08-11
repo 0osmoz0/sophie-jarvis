@@ -1,0 +1,169 @@
+JARVIS DECISION ENGINE — PHASE 18 REPORT
+========================================
+
+VERSION:
+0.18.0
+
+## PRE-AUDIT
+
+tools/jarvis-decision-preaudit.ts (read-only) +
+tools/.audit-cache/jarvis-decision-phase18-preaudit.txt
+
+Findings:
+- Decisions were dispersed in JarvisRuntime.handleNewIntent / processInput
+- LLM proposes intents only; PermissionManager / ActionConfirmation / ActionExecutor
+  remain authoritative
+- Clarifications split between ReferenceResolver (pre-LLM) and needs_clarification
+- Double understand on action path (legacy Phase 10)
+- BehaviorBrain absent — must stay absent
+
+## DECISION ARCHITECTURE
+
+src/decision/:
+  types.ts, DecisionEngine.ts, DecisionPolicy.ts, DecisionValidator.ts,
+  DecisionExplanation.ts, DecisionAuditLog.ts, ContradictionDetector.ts,
+  DecisionSimulator.ts, index.ts
+
+Pipeline:
+  LLM outcome + conversation refs + memory hints + environment
+  → DecisionEngine.evaluate → Decision
+  → JarvisRuntime routes ANSWER / CLARIFICATION / ACTION / …
+  → ACTION still goes through ActionPlanner → Permission → Confirmation → Executor
+
+## CONFIDENCE
+
+0..1 with categories VERY_LOW..VERY_HIGH.
+ACTION_MIN_CONFIDENCE = 0.72 (configurable via DecisionPolicy).
+LOW / VERY_LOW never auto-become ACTION.
+
+## CONTRADICTIONS
+
+ContradictionDetector:
+- user_correction ("non, Chrome")
+- memory_vs_explicit (explicit wins)
+- keep_open_vs_close → NO_ACTION
+
+## CONTEXT USAGE
+
+Environment / ContextSnapshot remain informational.
+contextUsed flag on Decision; multi-app ambiguity → CLARIFICATION.
+
+## MEMORY USAGE
+
+shouldConsultMemory() relevance helper.
+memoryUsed flag; memory preference never overrides explicit user request.
+
+## ACTION GATING
+
+DecisionPolicy.canProposeAction:
+- USER_REQUESTED only
+- confidence threshold
+- no missing fields
+- no clarification pending
+CONTEXT_SUGGESTED never becomes ACTION.
+DecisionValidator rejects forbidden payload fields (confirmationGranted, shell, …).
+
+## CLARIFICATION
+
+Minimal questions ("Safari ou Chrome ?", "Quelle application ?").
+INFORMATION_REQUIRED when target missing / unresolved reference.
+
+## SECURITY
+
+No ActionExecutor / PermissionManager / ActionConfirmation imports in src/decision.
+Injection → NO_ACTION / REFUSAL.
+Fake confirmation fields rejected.
+Security level may appear in evidence only — never bypasses Phase 8.
+
+Sophie: no BehaviorBrain changes; no new typed Sophie command events
+(decision audit is JARVIS-side). High-level Sophie decision signals deferred
+to avoid integration-contract churn.
+
+## SIMULATION
+
+MODE: SIMULATION
+total: 5000
+decision_distribution ≈ ANSWER/ACTION/CLARIFICATION/NO_ACTION/REFUSAL
+clarification_rate ≈ 0.143
+refusal_rate ≈ 0.071
+no_action_rate ≈ 0.214
+action_candidate_rate ≈ 0.286
+contradiction_rate ≈ 0.214
+memory_usage_rate ≈ 0.143
+context_usage_rate ≈ 0.143
+averageDecisionMs ≈ 0.004 (synthetic)
+
+## PERFORMANCE
+
+Scale checkpoints 10/100/500/1000/5000 — no linear growth with history
+(engine is O(1) per turn; conversation budgets Phase 17 remain active).
+No fictional SLA announced.
+
+## PRIVACY
+
+DecisionAuditEntry: decisionId, type, confidence, risk, sourceCategories,
+latency, flags — never message content / memory bodies / secrets.
+
+## TESTS
+
+jarvis-decision-preaudit.ts — OK
+jarvis-decision-smoke.ts — 18/18
+jarvis-decision-audit.ts — PASSED
+jarvis-decision-security-audit.ts — PASSED
+jarvis-decision-simulation.ts — SIMULATION OK
+
+## REGRESSION
+
+npx tsc --noEmit — OK
+Phases 1–17 smokes — green (core after allowlist fix)
+Phase 18 decision suite — green
+
+## LIMITATIONS
+
+- Heuristic confidence / contradictions (not a deep reasoner LLM)
+- Double understand on action planning path still present
+- Sophie decision_* outbound events not added (contract stability)
+- DecisionEngine does not replace IntentValidator (complements it)
+
+## KNOWN FAILURE MODES
+
+- Very novel phrasing may still fall to NO_ACTION / CLARIFICATION
+- Memory preference labels are soft hints, not structured preference IDs
+- If ActionPlanner denies after ACTION decision, runtime still surfaces deny
+  (correct — Decision ≠ Authorization)
+
+## FILES CREATED
+
+src/decision/types.ts
+src/decision/DecisionEngine.ts
+src/decision/DecisionPolicy.ts
+src/decision/DecisionValidator.ts
+src/decision/DecisionExplanation.ts
+src/decision/DecisionAuditLog.ts
+src/decision/ContradictionDetector.ts
+src/decision/DecisionSimulator.ts
+src/decision/index.ts
+docs/JARVIS_DECISION.md
+tools/jarvis-decision-preaudit.ts
+tools/jarvis-decision-smoke.ts
+tools/jarvis-decision-audit.ts
+tools/jarvis-decision-security-audit.ts
+tools/jarvis-decision-simulation.ts
+tools/.audit-cache/jarvis-decision-phase18-preaudit.txt
+tools/.audit-cache/jarvis-decision-phase18-report.txt
+
+## FILES MODIFIED
+
+package.json (0.18.0 + scripts)
+README.md
+src/runtime/JarvisRuntime.ts
+src/runtime/types.ts
+tools/security-invariants.ts
+
+PHASE 18 STATUS:
+COMPLETE
+
+PHASE 19:
+NOT STARTED
+
+STOP.

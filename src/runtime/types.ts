@@ -52,11 +52,18 @@ export interface InteractionTiming {
   confirmationMs: number | null;
   executionMs: number | null;
   totalMs: number;
+  /** Phase 17 — conversation prep (append/window/refs/memory). */
+  conversationMs?: number | null;
+  /** Phase 18 — DecisionEngine evaluation. */
+  decisionMs?: number | null;
 }
 
 export interface RuntimeAuditEntry {
   timestamp: string;
   interactionId: string;
+  /** Message id only — never message.content (privacy). */
+  messageId?: string | null;
+  role?: string | null;
   intentType: string | null;
   planStatus: string | null;
   risk: string | null;

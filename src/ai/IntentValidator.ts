@@ -28,6 +28,21 @@ const FORBIDDEN_KEYS = [
   "argv",
   "eva" + "l",
   "child_" + "process",
+  "permissionGranted",
+  "confirmationGranted",
+  "permission_granted",
+  "confirmation_granted",
+] as const;
+
+/** Top-level fields that must never appear in LLM output (Phase 17). */
+const FORBIDDEN_TOP_LEVEL = [
+  "execute",
+  "shell",
+  "command",
+  "permissionGranted",
+  "confirmationGranted",
+  "permission_granted",
+  "confirmation_granted",
 ] as const;
 
 const FORBIDDEN_VALUE_PARTS = [
@@ -83,7 +98,26 @@ export class IntentValidator {
     }
 
     const obj = candidate as Record<string, unknown>;
-    const keys = Object.keys(obj);
+
+    for (const bad of FORBIDDEN_TOP_LEVEL) {
+      if (Object.prototype.hasOwnProperty.call(obj, bad)) {
+        return fail(
+          AI_ERROR_CODES.FORBIDDEN_CONTENT,
+          `Forbidden top-level field: ${bad}`,
+        );
+      }
+    }
+
+    // Phase 17 alternate contract: { intent, entities?, references?, needsClarification?, payload? }
+    if (
+      typeof obj.intent === "string" &&
+      !Object.prototype.hasOwnProperty.call(obj, "type")
+    ) {
+      candidate = normalizePhase17Contract(obj);
+    }
+
+    const normalized = candidate as Record<string, unknown>;
+    const keys = Object.keys(normalized);
     if (!keys.includes("type") || !keys.includes("payload")) {
       return fail(AI_ERROR_CODES.INVALID_INTENT, "Missing type or payload");
     }
@@ -97,19 +131,19 @@ export class IntentValidator {
       }
     }
 
-    if (typeof obj.type !== "string") {
+    if (typeof normalized.type !== "string") {
       return fail(AI_ERROR_CODES.INVALID_INTENT, "type must be string");
     }
 
     if (
-      !obj.payload ||
-      typeof obj.payload !== "object" ||
-      Array.isArray(obj.payload)
+      !normalized.payload ||
+      typeof normalized.payload !== "object" ||
+      Array.isArray(normalized.payload)
     ) {
       return fail(AI_ERROR_CODES.INVALID_INTENT, "payload must be an object");
     }
 
-    const payload = obj.payload as Record<string, unknown>;
+    const payload = normalized.payload as Record<string, unknown>;
     const forbiddenField = findForbiddenKey(payload);
     if (forbiddenField) {
       return fail(
@@ -135,7 +169,7 @@ export class IntentValidator {
       }
     }
 
-    const type = obj.type;
+    const type = normalized.type;
 
     if ((NON_ACTION_INTENT_TYPES as readonly string[]).includes(type)) {
       return this.validateNonAction(type, payload);
@@ -528,11 +562,62 @@ function requireString(
 function findForbiddenKey(payload: Record<string, unknown>): string | null {
   for (const key of Object.keys(payload)) {
     const lower = key.toLowerCase();
-    if ((FORBIDDEN_KEYS as readonly string[]).includes(lower)) {
-      return key;
+    for (const forbidden of FORBIDDEN_KEYS) {
+      if (forbidden.toLowerCase() === lower) return key;
     }
   }
   return null;
+}
+
+/**
+ * Map Phase 17 LLM contract into the internal { type, payload } shape.
+ * entities / references are informational only — folded into payload when useful.
+ */
+function normalizePhase17Contract(
+  obj: Record<string, unknown>,
+): Record<string, unknown> {
+  const intentType = String(obj.intent);
+  if (obj.needsClarification === true) {
+    return {
+      type: "needs_clarification",
+      payload: {
+        question:
+          typeof obj.question === "string"
+            ? obj.question
+            : "Peux-tu préciser ?",
+      },
+    };
+  }
+
+  let payload: Record<string, unknown> =
+    obj.payload &&
+    typeof obj.payload === "object" &&
+    !Array.isArray(obj.payload)
+      ? { ...(obj.payload as Record<string, unknown>) }
+      : {};
+
+  if (Array.isArray(obj.entities)) {
+    for (const ent of obj.entities) {
+      if (!ent || typeof ent !== "object") continue;
+      const e = ent as Record<string, unknown>;
+      if (typeof e.application === "string" && !payload.application) {
+        payload.application = e.application;
+      }
+      if (typeof e.path === "string" && !payload.path) {
+        payload.path = e.path;
+      }
+      if (typeof e.label === "string" && typeof e.type === "string") {
+        if (e.type === "application" && !payload.application) {
+          payload.application = e.label;
+        }
+        if (e.type === "file" && !payload.path) {
+          payload.path = e.label;
+        }
+      }
+    }
+  }
+
+  return { type: intentType, payload };
 }
 
 function fail(code: string, message: string): IntentValidationFailure {
