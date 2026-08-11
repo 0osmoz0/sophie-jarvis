@@ -69,3 +69,35 @@ export { ContextService } from "./ContextService.js";
 export type { ContextServiceOptions } from "./ContextService.js";
 export { ContextFormatter } from "./ContextFormatter.js";
 export { MemoryContextAuditLog } from "./ContextAuditLog.js";
+
+export type { SophieEnvironmentAnchor, SophieAnchorProvider } from "./SophieEnvironmentAnchor.js";
+export {
+  emptySophieAnchor,
+  StaticSophieAnchorProvider,
+  UnavailableSophieAnchorProvider,
+  sophieCenter,
+  sophieBounds,
+  SOPHIE_EDGE_DEFAULTS,
+} from "./SophieEnvironmentAnchor.js";
+export type { SophieCursorRelation } from "./SophieCursorRelation.js";
+export {
+  computeSophieCursorRelation,
+  emptySophieCursorRelation,
+} from "./SophieCursorRelation.js";
+export type { SophieEdgeContext } from "./SophieEdgeContext.js";
+export {
+  computeSophieEdges,
+  emptySophieEdgeContext,
+} from "./SophieEdgeContext.js";
+export type { SophieSurfaceContext } from "./SophieSurfaceContext.js";
+export { emptySophieSurfaceContext } from "./SophieSurfaceContext.js";
+export type { SophieEnvironmentSignals } from "./SophieEnvironmentSignals.js";
+export { deriveSophieEnvironmentSignals } from "./SophieEnvironmentSignals.js";
+export type {
+  SophieEnvironmentSnapshot,
+  SophieEnvironmentConsumerOptions,
+} from "./SophieEnvironmentConsumer.js";
+export {
+  SophieEnvironmentConsumer,
+  emptySophieEnvironmentSnapshot,
+} from "./SophieEnvironmentConsumer.js";

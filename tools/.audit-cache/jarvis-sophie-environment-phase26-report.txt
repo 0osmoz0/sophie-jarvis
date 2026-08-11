@@ -1,0 +1,159 @@
+=== JARVIS SOPHIE ENVIRONMENT CONSUMER AUDIT ===
+
+## VERSION
+
+0.26.0
+
+## SOPHIE ANCHOR
+
+available: false (default in this repo)
+source: none — SophiePublicSnapshot has no geometry; no perch/physics/NSPanel
+coordinateSpace: unknown until external StaticSophieAnchorProvider injects cocoa-global-bottom-left
+reliable: false (in-repo)
+freshness: UNKNOWN without provider
+
+Injectable for tests / future Sophie runtime: StaticSophieAnchorProvider
+No second invented coordinate system.
+
+## CURSOR
+
+available: Phase 25 (Mock / NSEvent.mouseLocation)
+position: cocoa-global-bottom-left
+moving: null until two samples
+velocity: from Δdistance/Δtime
+distanceToSophie: null without anchor; computed when both available
+near / approaching / leaving: null without both anchors (never false by invention)
+
+## SCREEN
+
+display: EnvironmentContext.screen
+bounds / edges / corner: computeSophieEdges when Sophie anchor available
+multi-display: display bounds mapping; negative X supported
+
+## WINDOW
+
+AX: FocusedWindowContext (Phase 25)
+CGWindow: heuristic fallback retained
+focused: exposed in SophieEnvironmentSnapshot.focusedWindow
+reliability: AX > CG heuristic when Accessibility granted
+
+## APPLICATION
+
+active / running / changed: from EnvironmentContext + EnvironmentChangeTracker
+signals.activeApplicationChanged: event-derived
+
+## SESSION
+
+locked: session.locked (null stays UNKNOWN)
+userPresent: often null
+activity: userActivityLevel on signals
+
+## SURFACE
+
+onValidSurface: null
+inVoid: null
+nearPerch / nearWindow: null
+reason: MISSING physics/collision in jarvis — not invented
+
+## AUDIO
+
+available: UNAVAILABLE
+playing: null
+track / application: null
+reason: Phase 25 — no public Now Playing; open ≠ playing
+AUDIO_* events never synthesized without proof
+
+## FRESHNESS
+
+Phase 24/25 computeFreshness on EnvironmentContext + SophieEnvironmentSnapshot.freshness
+STALE marked; not presented as live without status
+
+## SIGNALS
+
+SophieEnvironmentSignals: cursorNear/Moving/Approaching/Leaving,
+  edge/corner, surface (null), change flags, activity, sessionLocked
+Observations only — not commands
+
+## MULTI-DISPLAY
+
+Same global Cocoa space for cursor + optional Sophie anchor
+Secondary / negative coordinates covered in simulation
+
+## DUPLICATIONS
+
+Documented (unchanged behavior):
+- SecurityMonitor may still double-snapshot Context
+- Phase 2 stubs vs native services
+- NSWorkspace frontmost vs CG active window
+Phase 26 does not mass-refactor; Sophie consumer reuses getEnvironmentSnapshot once per call
+
+## SECURITY
+
+jarvis-sophie-environment-security-audit: CLEAN
+No ActionExecutor / PermissionManager / DecisionEngine / BehaviorBrain / setInterval
+security-invariants: CLEAN
+
+## PRIVACY
+
+jarvis-sophie-environment-privacy-audit: CLEAN
+No screenshots / audio buffers / clipboard / keystrokes in snapshot dump
+Surface not coerced to false
+
+## PERFORMANCE
+
+Mock path measured (example):
+environmentSnapshotMs / sophieAnchorMs / consumeDeriveMs / getSophieEnvironmentSnapshotMs
+O(1) derive beyond native/source cost
+No invented SLA
+
+## SIMULATION
+
+MODE: SIMULATION
+snapshots: 10000
+NOT real observations
+
+## KNOWN LIMITATIONS
+
+- No in-repo Sophie global position → distance/edges UNKNOWN by default
+- Surface/perch/void MISSING
+- Audio UNAVAILABLE
+- AX requires Accessibility TCC
+
+## MISSING CAPABILITIES
+
+- Real Sophie window/NSPanel anchor from Sophie app
+- Physics surface validity
+- Now Playing public API
+
+## RECOMMENDATIONS
+
+P0: Wire real Sophie anchor from Sophie runtime when geometry exists (same cocoa space)
+P1: Live AX + cursor validation on darwin with rebuild native
+P1: Optional per-app Now Playing (explicit config only)
+P2: Reduce SecurityMonitor double Context snapshot (passive)
+P3: Future behavior layer consuming SophieEnvironmentSignals (NOT Phase 26)
+
+## FUTURE PHASES
+
+Phase 27 candidates (NOT STARTED):
+- Sophie environmental reactions (still gated)
+- Optional Now Playing bridge
+- Natural animations driven by signals (after explicit product design)
+
+## REGRESSION
+
+npx tsc --noEmit OK
+sophie-env smoke 8/8, sim 10000, audit/security/privacy/perf OK
+voice / ollama / pipeline / response / decision / conversation /
+environment / cursor audits & smokes OK
+security-invariants OK
+
+PHASE 26 STATUS
+---------------
+COMPLETE
+
+PHASE 27
+--------
+NOT STARTED
+
+STOP.

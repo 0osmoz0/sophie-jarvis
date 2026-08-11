@@ -1893,6 +1893,63 @@ const ALLOWLIST: Array<{ fileSubstring: string; patternNames: string[] }> = [
     ],
   },
   {
+    fileSubstring: "jarvis-sophie-environment-preaudit.ts",
+    patternNames: ["microphone", "fs writeFile", "camera access"],
+  },
+  {
+    fileSubstring: "jarvis-sophie-environment-smoke.ts",
+    patternNames: [
+      "microphone",
+      "camera access",
+      "child_process",
+      "BehaviorBrain",
+      "ActionExecutor",
+      "setInterval",
+    ],
+  },
+  {
+    fileSubstring: "jarvis-sophie-environment-audit.ts",
+    patternNames: ["microphone", "camera access"],
+  },
+  {
+    fileSubstring: "jarvis-sophie-environment-security-audit.ts",
+    patternNames: [
+      "child_process",
+      "exec(",
+      "spawn(",
+      "microphone",
+      "camera access",
+      "ActionExecutor",
+      "PermissionManager",
+      "BehaviorBrain",
+      "DecisionEngine",
+    ],
+  },
+  {
+    fileSubstring: "jarvis-sophie-environment-privacy-audit.ts",
+    patternNames: ["microphone", "camera access"],
+  },
+  {
+    fileSubstring: "jarvis-sophie-environment-simulation.ts",
+    patternNames: ["microphone", "camera access", "fetch to external"],
+  },
+  {
+    fileSubstring: "jarvis-sophie-environment-performance.ts",
+    patternNames: ["microphone", "camera access", "fetch to external"],
+  },
+  {
+    fileSubstring: "JARVIS_SOPHIE_ENVIRONMENT.md",
+    patternNames: [
+      "microphone",
+      "camera access",
+      "BehaviorBrain",
+      "ActionExecutor",
+      "PermissionManager",
+      "DecisionEngine",
+      "child_process",
+    ],
+  },
+  {
     fileSubstring: "CursorContext.ts",
     patternNames: ["microphone"],
   },

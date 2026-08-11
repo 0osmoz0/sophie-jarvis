@@ -43,6 +43,8 @@ import { emptyAudioContext } from "./AudioContext.js";
 import type { CursorReader, FocusReader } from "./EnvironmentObservation.js";
 import { MacOSCursorReader, UnavailableCursorReader } from "../platform/macos/MacOSCursorReader.js";
 import { MacOSFocusReader, UnavailableFocusReader } from "../platform/macos/MacOSFocusReader.js";
+import type { SophieEnvironmentConsumer } from "./SophieEnvironmentConsumer.js";
+import type { SophieEnvironmentSnapshot } from "./SophieEnvironmentConsumer.js";
 
 export interface ContextServiceOptions {
   observation?: ObservationService;
@@ -57,6 +59,8 @@ export interface ContextServiceOptions {
   focusReader?: FocusReader;
   cursorPolicy?: CursorProximityPolicy;
   cursorMotion?: CursorMotionTracker;
+  /** Phase 26 — optional Sophie environment consumer (observation only). */
+  sophieEnvironmentConsumer?: SophieEnvironmentConsumer;
 }
 
 /**
@@ -78,6 +82,7 @@ export class ContextService {
   private readonly focusReader: FocusReader;
   private readonly cursorPolicy: CursorProximityPolicy;
   private readonly cursorMotion: CursorMotionTracker;
+  private readonly sophieEnvironmentConsumer: SophieEnvironmentConsumer | undefined;
 
   constructor(options: ContextServiceOptions = {}) {
     this.observation = options.observation;
@@ -99,8 +104,25 @@ export class ContextService {
       (process.platform === "darwin"
         ? new MacOSFocusReader()
         : new UnavailableFocusReader());
-    this.cursorPolicy = options.cursorPolicy ?? new CursorProximityPolicy();
+    this.sophieEnvironmentConsumer = options.sophieEnvironmentConsumer;
+    this.cursorPolicy =
+      options.cursorPolicy ??
+      options.sophieEnvironmentConsumer?.toCursorProximityPolicy() ??
+      new CursorProximityPolicy();
     this.cursorMotion = options.cursorMotion ?? new CursorMotionTracker();
+  }
+
+  /**
+   * Phase 26 — unique API for Sophie environmental consumption.
+   * Requires sophieEnvironmentConsumer in options (or creates default unavailable-anchor consumer).
+   */
+  async getSophieEnvironmentSnapshot(): Promise<SophieEnvironmentSnapshot> {
+    const { SophieEnvironmentConsumer: Consumer } = await import(
+      "./SophieEnvironmentConsumer.js"
+    );
+    const consumer =
+      this.sophieEnvironmentConsumer ?? new Consumer();
+    return consumer.getSophieEnvironmentSnapshot(this);
   }
 
   getEnvironmentChangeHistory() {

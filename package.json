@@ -1,6 +1,6 @@
 {
   "name": "sophie-jarvis",
-  "version": "0.25.0",
+  "version": "0.26.0",
   "description": "JARVIS Core — modular, permissioned tool execution foundation",
   "private": true,
   "type": "module",
@@ -93,7 +93,14 @@
     "audit:cursor-security": "tsx tools/jarvis-cursor-security-audit.ts",
     "audit:cursor-privacy": "tsx tools/jarvis-cursor-privacy-audit.ts",
     "sim:cursor": "tsx tools/jarvis-cursor-simulation.ts",
-    "perf:environment": "tsx tools/jarvis-environment-performance.ts"
+    "perf:environment": "tsx tools/jarvis-environment-performance.ts",
+    "preaudit:sophie-env": "tsx tools/jarvis-sophie-environment-preaudit.ts",
+    "smoke:sophie-env": "tsx tools/jarvis-sophie-environment-smoke.ts",
+    "audit:sophie-env": "tsx tools/jarvis-sophie-environment-audit.ts",
+    "audit:sophie-env-security": "tsx tools/jarvis-sophie-environment-security-audit.ts",
+    "audit:sophie-env-privacy": "tsx tools/jarvis-sophie-environment-privacy-audit.ts",
+    "sim:sophie-env": "tsx tools/jarvis-sophie-environment-simulation.ts",
+    "perf:sophie-env": "tsx tools/jarvis-sophie-environment-performance.ts"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
