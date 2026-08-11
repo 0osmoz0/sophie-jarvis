@@ -4,6 +4,8 @@ import type { IntentRouter } from "../ai/IntentRouter.js";
 import type { ContextService } from "../context/ContextService.js";
 import type { ContextQueryKind } from "../context/types.js";
 import { ContextFormatter } from "../context/ContextFormatter.js";
+import type { SophieIntegration } from "../integration/SophieIntegration.js";
+import type { SophieEmitResult } from "../integration/types.js";
 import {
   ConversationContext,
   isAffirmative,
@@ -24,6 +26,8 @@ export interface JarvisRuntimeOptions {
   actions: ActionService;
   /** Optional Phase 11 context façade (read-only). */
   contextService?: ContextService;
+  /** Optional Phase 12 Sophie signal integration (never executes actions). */
+  sophieIntegration?: SophieIntegration;
   formatter?: ResponseFormatter;
   context?: ConversationContext;
   audit?: RuntimeAuditSink;
@@ -46,6 +50,7 @@ export class JarvisRuntime {
   private readonly router: IntentRouter;
   private readonly actions: ActionService;
   private readonly contextService: ContextService | undefined;
+  private readonly sophieIntegration: SophieIntegration | undefined;
   private readonly contextFormatter = new ContextFormatter();
   private readonly formatter: ResponseFormatter;
   private readonly context: ConversationContext;
@@ -57,6 +62,7 @@ export class JarvisRuntime {
     this.router = options.router;
     this.actions = options.actions;
     this.contextService = options.contextService;
+    this.sophieIntegration = options.sophieIntegration;
     this.formatter = options.formatter ?? new ResponseFormatter();
     this.context = options.context ?? new ConversationContext();
     this.audit = options.audit ?? new MemoryRuntimeAuditLog();
@@ -69,6 +75,27 @@ export class JarvisRuntime {
 
   getContext(): ConversationContext {
     return this.context;
+  }
+
+  /**
+   * Phase 12 — accept a Sophie external signal into context/memory only.
+   * Does not plan or execute actions (no parallel execution path).
+   */
+  receiveSophieEvent(event: unknown): SophieEmitResult {
+    if (!this.sophieIntegration) {
+      return {
+        ok: false,
+        code: "UNAVAILABLE",
+        message: "Sophie integration is not configured",
+        timing: {
+          eventDispatchMs: 0,
+          integrationMs: 0,
+          snapshotMs: 0,
+        },
+      };
+    }
+    const result = this.sophieIntegration.handleInput(event);
+    return result;
   }
 
   async processInput(input: string): Promise<ProcessInputResult> {
@@ -517,6 +544,7 @@ export class JarvisRuntime {
   ): ProcessInputResult {
     timing.totalMs = Math.max(0, this.now() - totalStart);
 
+    const previousState = this.state;
     // Persist waiting; otherwise return to IDLE after terminal outcomes.
     if (nextState === "WAITING_CONFIRMATION") {
       this.state = "WAITING_CONFIRMATION";
@@ -528,6 +556,10 @@ export class JarvisRuntime {
       this.state = "IDLE";
     } else {
       this.state = nextState;
+    }
+
+    if (this.sophieIntegration && previousState !== this.state) {
+      this.sophieIntegration.notifyStateChanged(this.state, previousState);
     }
 
     const pending = this.context.getPending();

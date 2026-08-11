@@ -1,0 +1,89 @@
+JARVIS SOPHIE INTEGRATION — PHASE 12 REPORT
+===========================================
+Generated: 2026-08-11
+Repository: sophie-jarvis
+Version: 0.12.0
+
+1. ARCHITECTURE
+---------------
+Sophie → SophieAPI.emit → SophieIntegration (validate)
+  → SophieSignalMemory (bounded) → ContextSnapshot.sophie
+  → SophieEventBus (in/out)
+  → JarvisRuntime.receiveSophieEvent (context only)
+  → normal pipeline for any future action
+
+Sophie never reaches ActionExecutor / FileService / ApplicationService.
+
+2. MODULE
+---------
+src/integration/types.ts
+src/integration/SophieEventBus.ts
+src/integration/SophieIntegration.ts
+src/integration/SophieAPI.ts
+src/integration/index.ts
+src/integration/SophieBridge.ts (Phase 1 stub retained)
+
+3. INPUT EVENTS
+---------------
+user_returned, user_idle, user_became_busy, user_became_focused,
+pet, poke, wave, love,
+app_opened, app_closed,
+media_started, media_stopped, music_started, music_stopped,
+external_activity
+
+4. OUTPUT EVENTS
+----------------
+behavior_started, behavior_finished, user_interaction, state_changed
+High-level only — no scores, prompts, permission internals.
+
+5. PUBLIC API
+-------------
+emit / subscribe / unsubscribe / getSnapshot
+No execute / runCommand / shell / performAction.
+
+6. TESTS
+--------
+jarvis-integration-smoke.ts ........ 15/15 PASS
+integration-contract-test.ts ....... PASS (tests 1–9)
+jarvis-integration-security-audit.ts PASS
+
+7. PERFORMANCE
+--------------
+Metrics: eventDispatchMs, integrationMs, snapshotMs
+On-demand only — no polling / scheduler / infinite retry.
+
+8. SECURITY
+-----------
+Forbidden in src/integration: child_process, exec/spawn/fork,
+shell, CGEvent, robotjs/nut.js, fetch, ActionExecutor,
+PermissionManager, requestState, AnimationPlayer, FileService,
+ApplicationService, setInterval, BehaviorBrain
+Payload keys rejected: command, shell, exec, script, goal,
+animation, stateOverride, animationOverride, …
+
+9. DOCUMENTATION
+----------------
+docs/JARVIS_SOPHIE_INTEGRATION.md
+README updated (0.12.0)
+npm scripts: smoke:integration, audit:integration,
+             test:integration-contract
+
+10. LIMITATIONS
+---------------
+Signal contract only — no camera/mic/SMS/shell/browser automation.
+Bounded ephemeral memory (last signal per category).
+Sophie UI animations remain Sophie’s responsibility.
+
+11. REGRESSIONS
+---------------
+npx tsc --noEmit ................... PASS
+Phases 1 → 11 ...................... PASS
+Phase 12 smoke + contract + audit ... PASS
+No regressions observed.
+
+END OF PHASE 12 — STOP (do not start Phase 13).
+
+« JARVIS et Sophie peuvent maintenant communiquer via un contrat
+d'intégration typé et sécurisé. Sophie fournit des signaux ; JARVIS
+conserve entièrement la responsabilité du contexte, de la décision,
+des permissions et de l'exécution. »

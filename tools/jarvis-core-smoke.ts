@@ -127,7 +127,7 @@ async function main(): Promise<void> {
     };
     assert(typeof data.platform === "string", "platform");
     assert(typeof data.arch === "string", "arch");
-    assert(data.jarvisVersion === "0.11.0", "version");
+    assert(data.jarvisVersion === "0.12.0", "version");
     assert(typeof data.timestamp === "string", "timestamp");
   });
 

@@ -244,11 +244,22 @@ export type {
   SophieBridge,
   SophieBridgeMessage,
   SophieBridgeMessageType,
-} from "../integration/SophieBridge.js";
+  SophieInputEvent,
+  SophieOutputEvent,
+  SophiePublicSnapshot,
+  SophieEmitResult,
+  ContextSophieSignals as SophieContextSignals,
+} from "../integration/index.js";
 export {
   NullSophieBridge,
   createSophieBridgeMessage,
-} from "../integration/SophieBridge.js";
+  SophieEventBus,
+  SophieIntegration,
+  SophieAPI,
+  SOPHIE_INPUT_EVENT_TYPES,
+  SOPHIE_OUTPUT_EVENT_TYPES,
+  SOPHIE_ERROR_CODES,
+} from "../integration/index.js";
 
 export type { SecurityEvent, SecurityEventSeverity } from "../security/SecurityEvent.js";
 export { createSecurityEvent } from "../security/SecurityEvent.js";

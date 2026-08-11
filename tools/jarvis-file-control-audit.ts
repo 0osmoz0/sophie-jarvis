@@ -81,6 +81,7 @@ export async function runFileControlAudit(): Promise<FileControlAuditReport> {
     if (rel.startsWith("src/ai/")) continue;
     if (rel.startsWith("src/runtime/")) continue;
     if (rel.startsWith("src/context/")) continue;
+    if (rel.startsWith("src/integration/")) continue;
     const isFileService = rel === "src/files/FileService.ts";
     const isTool = rel.startsWith("src/tools/");
 

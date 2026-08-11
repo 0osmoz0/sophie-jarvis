@@ -1,6 +1,6 @@
 {
   "name": "sophie-jarvis",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "JARVIS Core — modular, permissioned tool execution foundation",
   "private": true,
   "type": "module",
@@ -28,7 +28,10 @@
     "audit:runtime": "tsx tools/jarvis-runtime-security-audit.ts",
     "smoke:context": "tsx tools/jarvis-context-smoke.ts",
     "audit:context": "tsx tools/jarvis-context-audit.ts",
-    "audit:context-security": "tsx tools/jarvis-context-security-audit.ts"
+    "audit:context-security": "tsx tools/jarvis-context-security-audit.ts",
+    "smoke:integration": "tsx tools/jarvis-integration-smoke.ts",
+    "audit:integration": "tsx tools/jarvis-integration-security-audit.ts",
+    "test:integration-contract": "tsx tools/integration-contract-test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",

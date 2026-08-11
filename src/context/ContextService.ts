@@ -9,6 +9,7 @@ import type {
   ContextScreenInfo,
   ContextServiceResult,
   ContextSnapshot,
+  ContextSophieSignals,
   ContextTiming,
   DomainStatus,
 } from "./types.js";
@@ -20,6 +21,8 @@ export interface ContextServiceOptions {
   screen?: ScreenService;
   activity?: UserActivityService;
   audit?: ContextAuditSink;
+  /** Optional Phase 12 ephemeral Sophie signals (read-only merge). */
+  sophieSignals?: () => ContextSophieSignals | undefined;
 }
 
 /**
@@ -32,6 +35,7 @@ export class ContextService {
   private readonly screen: ScreenService | undefined;
   private readonly activity: UserActivityService | undefined;
   private readonly audit: ContextAuditSink;
+  private readonly sophieSignals: (() => ContextSophieSignals | undefined) | undefined;
 
   constructor(options: ContextServiceOptions = {}) {
     this.observation = options.observation;
@@ -39,6 +43,7 @@ export class ContextService {
     this.screen = options.screen;
     this.activity = options.activity;
     this.audit = options.audit ?? new MemoryContextAuditLog();
+    this.sophieSignals = options.sophieSignals;
   }
 
   async getSnapshot(
@@ -191,6 +196,23 @@ export class ContextService {
 
     timing.totalMs = Date.now() - totalStart;
     timing.contextSnapshotMs = timing.totalMs;
+
+    if (this.sophieSignals) {
+      const signals = this.sophieSignals();
+      if (signals) {
+        snapshot.sophie = {
+          lastSophieInteraction: signals.lastSophieInteraction
+            ? { ...signals.lastSophieInteraction }
+            : null,
+          lastMediaEvent: signals.lastMediaEvent
+            ? { ...signals.lastMediaEvent }
+            : null,
+          lastUserSignal: signals.lastUserSignal
+            ? { ...signals.lastUserSignal }
+            : null,
+        };
+      }
+    }
 
     this.audit.append({
       timestamp: new Date().toISOString(),

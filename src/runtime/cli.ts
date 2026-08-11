@@ -15,6 +15,7 @@ import { ObservationService } from "../observation/ObservationService.js";
 import { ScreenService } from "../screen/ScreenService.js";
 import { UserActivityService } from "../presence/UserActivityService.js";
 import { ContextService } from "../context/ContextService.js";
+import { SophieIntegration } from "../integration/SophieIntegration.js";
 import { ActionService } from "../actions/ActionService.js";
 import { ActionConfirmation } from "../actions/ActionConfirmation.js";
 import { IntentRouter } from "../ai/IntentRouter.js";
@@ -60,18 +61,25 @@ function createProductionRuntime(): JarvisRuntime {
     confirmation: new ActionConfirmation(),
   });
   const router = new IntentRouter({ provider, actions });
+  let runtime!: JarvisRuntime;
+  const sophieIntegration = new SophieIntegration({
+    getRuntimeState: () => runtime.getState(),
+  });
   const contextService = new ContextService({
     observation: new ObservationService(),
     applications: apps,
     screen: new ScreenService(),
     activity: new UserActivityService(),
+    sophieSignals: () => sophieIntegration.getContextSignals(),
   });
-  return new JarvisRuntime({
+  runtime = new JarvisRuntime({
     router,
     actions,
     contextService,
+    sophieIntegration,
     formatter: new ResponseFormatter(),
   });
+  return runtime;
 }
 
 async function main(): Promise<void> {
