@@ -27,6 +27,10 @@ export {
   MockApplicationService,
 } from "./ApplicationService.js";
 export type { ApplicationServiceOptions } from "./ApplicationService.js";
+export {
+  DEFAULT_MACOS_APPLICATIONS,
+  seedDefaultMacOSApplications,
+} from "./defaultMacOSApplications.js";
 
 export type {
   ApplicationBackend,

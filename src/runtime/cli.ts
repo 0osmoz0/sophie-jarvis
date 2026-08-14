@@ -11,6 +11,7 @@ import {
   ApplicationRegistry,
   ApplicationService,
   MemoryApplicationAuditLog,
+  seedDefaultMacOSApplications,
 } from "../applications/index.js";
 import { ObservationService } from "../observation/ObservationService.js";
 import { ScreenService } from "../screen/ScreenService.js";
@@ -61,10 +62,14 @@ function createProductionRuntime(): {
   }
 
   const appRegistry = new ApplicationRegistry();
+  const seeded = seedDefaultMacOSApplications(appRegistry);
   const apps = new ApplicationService({
     registry: appRegistry,
     audit: new MemoryApplicationAuditLog(),
   });
+  if (seeded > 0) {
+    console.log(`(Applications registry: ${seeded} apps allowlisted)`);
+  }
   const permissions = new PermissionManager();
   const actions = new ActionService({
     files,
